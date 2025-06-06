@@ -7,6 +7,8 @@ import asyncio
 import logging
 from typing import Any, Dict
 
+from .mcp_core_engine import MCPCoreEngine
+
 
 class Config:
     """
@@ -21,6 +23,7 @@ class Config:
     port = None
     mcp_configuration = None
     logger = None
+    mcp_core_engine = None
 
     @classmethod
     def initialize(cls, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
@@ -33,6 +36,7 @@ class Config:
         try:
             cls.logger = logger
             cls._set_parameters(setting)
+            cls._initialize_mcp_core_engine(logger, setting)
             logger.info("Configuration initialized successfully.")
         except Exception as e:
             logger.exception("Failed to initialize configuration.")
@@ -52,3 +56,18 @@ class Config:
         if setting["mcp_configuration"] is not None:
             cls.logger.info("MCP Configuration loaded successfully.")
             cls.mcp_configuration = setting["mcp_configuration"]
+
+    @classmethod
+    def _initialize_mcp_core_engine(
+        cls, logger: logging.Logger, setting: Dict[str, Any]
+    ) -> None:
+        """
+        Initialize AWS services, such as the S3 client.
+        Args:
+            setting (Dict[str, Any]): Configuration dictionary.
+        """
+        if all(
+            setting.get(k)
+            for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
+        ):
+            cls.mcp_core_engine = MCPCoreEngine(logger, **setting)

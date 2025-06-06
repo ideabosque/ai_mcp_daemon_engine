@@ -28,6 +28,8 @@ from mcp.types import (
     Tool,
 )
 
+from silvaengine_utility import Utility
+
 from .config import Config
 from .mcp_utility import (
     execute_prompt_function,
@@ -362,6 +364,15 @@ async def root(endpoint_id: str) -> Dict[str, Any]:
         "resources": jsonable_encoder(resources),
         "prompts": jsonable_encoder(prompts),
     }
+
+
+# === GraphQL Endpoint ===
+@app.post("/{endpoint_id}/mcp_core_graphql")
+async def mcp_core_graphql(endpoint_id: str, request: Request):
+    params = await request.json()
+    params.update({"endpoint_id": endpoint_id})
+
+    return Utility.json_loads(Config.mcp_core_engine.mcp_core_graphql(**params))
 
 
 # === Broadcast Logic ===
