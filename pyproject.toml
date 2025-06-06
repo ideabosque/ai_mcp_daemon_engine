@@ -1,0 +1,13 @@
+[project]
+name = "ai-mcp-daemon-engine"
+version = "0.0.1"
+description = "MCP Daemon CLI for SSE or stdio transport"
+authors = [{name = "Idea Bosque"}]
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "mcp",  # assuming your module is published or locally linkable
+]
+
+[project.scripts]
+mcp-daemon = "ai_mcp_daemon_engine.main:main"
