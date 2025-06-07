@@ -53,10 +53,7 @@ app.add_middleware(
 # === Tool Definitions ===
 @server.list_tools()
 async def list_tools(endpoint_id: str) -> list[Tool]:
-    if endpoint_id == "default":
-        tools = Config.mcp_configuration["tools"]["tools"]
-    else:
-        raise ValueError(f"Unknown endpoint: {endpoint_id}")
+    tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
     return [Tool(**tool) for tool in tools]
 
 
@@ -64,43 +61,33 @@ async def list_tools(endpoint_id: str) -> list[Tool]:
 async def call_tool(
     endpoint_id: str, name: str, arguments: dict[str, Any] | None
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
-    if endpoint_id == "default":
-        tools = Config.mcp_configuration["tools"]["tools"]
-        if not any(tool["name"] == name for tool in tools):
-            raise ValueError(f"Unknown tool: {name}")
-    else:
-        raise ValueError(f"Unknown endpoint: {endpoint_id}")
+    tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
+    if not any(tool["name"] == name for tool in tools):
+        raise ValueError(f"Unknown tool: {name}")
 
-    return execute_tool_function(name, arguments)
+    return execute_tool_function(endpoint_id, name, arguments)
 
 
 @server.list_resources()
 async def list_resources(endpoint_id: str) -> list[Resource]:
-    if endpoint_id == "default":
-        resources = Config.mcp_configuration["resources"]["resources"]
-    else:
-        raise ValueError(f"Unknown endpoint: {endpoint_id}")
+    resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
+
     return [Resource(**resource) for resource in resources]
 
 
 @server.read_resource()
 async def read_resource(endpoint_id: str, uri: str) -> str:
-    if endpoint_id == "default":
-        resources = Config.mcp_configuration["resources"]["resources"]
-        if not any(resource["uri"] == uri for resource in resources):
-            raise ValueError(f"Unknown resource: {uri}")
-    else:
-        raise ValueError(f"Unknown endpoint: {endpoint_id}")
+    resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
+    if not any(resource["uri"] == uri for resource in resources):
+        raise ValueError(f"Unknown resource: {uri}")
 
-    return execute_resource_function(uri)
+    return execute_resource_function(endpoint_id, uri)
 
 
 @server.list_prompts()
 async def list_prompts(endpoint_id: str) -> list[Prompt]:
-    if endpoint_id == "default":
-        prompts = Config.mcp_configuration["prompts"]["prompts"]
-    else:
-        raise ValueError(f"Unknown endpoint: {endpoint_id}")
+    prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
+
     return [
         Prompt(
             name=prompt["name"],
@@ -115,14 +102,11 @@ async def list_prompts(endpoint_id: str) -> list[Prompt]:
 async def get_prompt(
     endpoint_id: str, name: str, arguments: dict[str, str] | None
 ) -> GetPromptResult:
-    if endpoint_id == "default":
-        prompts = Config.mcp_configuration["prompts"]["prompts"]
-        if not any(prompt["name"] == name for prompt in prompts):
-            raise ValueError(f"Unknown prompt: {name}")
-    else:
-        raise ValueError(f"Unknown endpoint: {endpoint_id}")
+    prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
+    if not any(prompt["name"] == name for prompt in prompts):
+        raise ValueError(f"Unknown prompt: {name}")
 
-    return execute_prompt_function(name, arguments)
+    return execute_prompt_function(endpoint_id, name, arguments)
 
 
 # === MCP Message Handling ===

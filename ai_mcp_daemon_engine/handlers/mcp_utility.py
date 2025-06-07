@@ -20,6 +20,7 @@ from .config import Config
 
 
 def execute_tool_function(
+    endpoint_id: str,
     name: str,
     arguments: Dict[str, Any],
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
@@ -27,7 +28,9 @@ def execute_tool_function(
         tool = next(
             (
                 tool
-                for tool in Config.mcp_configuration["tools"]["tools"]
+                for tool in Config.fetch_mcp_configuration(endpoint_id)["tools"][
+                    "tools"
+                ]
                 if tool["name"] == name
             ),
             {},
@@ -42,7 +45,9 @@ def execute_tool_function(
         tool_module = next(
             (
                 tool_module
-                for tool_module in Config.mcp_configuration["tools"]["tool_modules"]
+                for tool_module in Config.fetch_mcp_configuration(endpoint_id)["tools"][
+                    "tool_modules"
+                ]
                 if tool_module["name"] == name
             ),
             {},
@@ -64,13 +69,16 @@ def execute_tool_function(
 
 
 def execute_resource_function(
+    endpoint_id: str,
     uri: str,
 ) -> str:
     try:
         resource = next(
             (
                 resource
-                for resource in Config.mcp_configuration["resources"]["resources"]
+                for resource in Config.fetch_mcp_configuration(endpoint_id)[
+                    "resources"
+                ]["resources"]
                 if resource["uri"] == uri
             ),
             {},
@@ -79,9 +87,9 @@ def execute_resource_function(
         resource_module = next(
             (
                 resource_module
-                for resource_module in Config.mcp_configuration["resources"][
-                    "resource_modules"
-                ]
+                for resource_module in Config.fetch_mcp_configuration(endpoint_id)[
+                    "resources"
+                ]["resource_modules"]
                 if resource_module["name"] == resource["name"]
             ),
             {},
@@ -100,6 +108,7 @@ def execute_resource_function(
 
 
 def execute_prompt_function(
+    endpoint_id: str,
     name: str,
     arguments: Dict[str, Any],
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
@@ -107,7 +116,9 @@ def execute_prompt_function(
         prompt = next(
             (
                 prompt
-                for prompt in Config.mcp_configuration["prompts"]["prompts"]
+                for prompt in Config.fetch_mcp_configuration(endpoint_id)["prompts"][
+                    "prompts"
+                ]
                 if prompt["name"] == name
             ),
             {},
@@ -122,9 +133,9 @@ def execute_prompt_function(
         prompt_module = next(
             (
                 prompt_module
-                for prompt_module in Config.mcp_configuration["prompts"][
-                    "prompt_modules"
-                ]
+                for prompt_module in Config.fetch_mcp_configuration(endpoint_id)[
+                    "prompts"
+                ]["prompt_modules"]
                 if prompt_module["name"] == name
             ),
             {},

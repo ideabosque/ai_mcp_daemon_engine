@@ -60,6 +60,7 @@ class MCPFunctionModel(BaseModel):
     module_name = UnicodeAttribute(null=True)
     function_name = UnicodeAttribute(null=True)
     setting = MapAttribute()
+    return_type = UnicodeAttribute(null=True)
     source = UnicodeAttribute(null=True)
     updated_by = UnicodeAttribute()
     created_at = UTCDateTimeAttribute()
@@ -177,6 +178,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
             "annotations",
             "module_name",
             "function_name",
+            "return_type",
             "source",
         ]:
             if key in kwargs:
@@ -203,6 +205,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         "module_name": MCPFunctionModel.module_name,
         "function_name": MCPFunctionModel.function_name,
         "setting": MCPFunctionModel.setting,
+        "return_type": MCPFunctionModel.return_type,
         "source": MCPFunctionModel.source,
     }
 

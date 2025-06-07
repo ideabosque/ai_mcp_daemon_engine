@@ -20,6 +20,7 @@ class MCPFunctionType(ObjectType):
     module_name = String()
     function_name = String()
     setting = JSON()
+    return_type = String()
     source = String()
     updated_by = String()
     created_at = DateTime()
