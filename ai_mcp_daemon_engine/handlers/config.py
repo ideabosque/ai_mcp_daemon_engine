@@ -7,6 +7,7 @@ import asyncio
 import logging
 from typing import Any, Dict
 
+from ..models import utils
 from .mcp_core_engine import MCPCoreEngine
 
 
@@ -37,6 +38,8 @@ class Config:
             cls.logger = logger
             cls._set_parameters(setting)
             cls._initialize_mcp_core_engine(logger, setting)
+            if setting.get("test_mode") == "local_for_all":
+                cls._initialize_tables(logger)
             logger.info("Configuration initialized successfully.")
         except Exception as e:
             logger.exception("Failed to initialize configuration.")
@@ -71,3 +74,11 @@ class Config:
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
             cls.mcp_core_engine = MCPCoreEngine(logger, **setting)
+
+    @classmethod
+    def _initialize_tables(cls, logger: logging.Logger) -> None:
+        """
+        Initialize database tables by calling the utils._initialize_tables() method.
+        This is an internal method used during configuration setup.
+        """
+        utils._initialize_tables(logger)

@@ -13,7 +13,7 @@ from silvaengine_utility import JSON
 class MCPFunctionType(ObjectType):
     endpoint_id = String()
     name = String()
-    type = String()
+    mcp_type = String()
     description = String()
     data = JSON()
     annotations = String()

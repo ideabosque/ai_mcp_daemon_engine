@@ -22,9 +22,14 @@ class MCPCoreEngine(SilvaEngineDynamoDBBase):
         self.setting = setting
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
+        ## Test the waters 🧪 before diving in!
+        ##<--Testing Data-->##
+        if params.get("endpoint_id") is None:
+            params["endpoint_id"] = self.setting.get("endpoint_id")
+        ##<--Testing Data-->##
         schema = Schema(
             query=Query,
-            # mutation=Mutations,
-            # types=type_class(),
+            mutation=Mutations,
+            types=type_class(),
         )
         return self.graphql_execute(schema, **params)
