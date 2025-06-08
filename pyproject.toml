@@ -6,7 +6,8 @@ authors = [{name = "Idea Bosque"}]
 dependencies = [
   "fastapi",
   "uvicorn",
-  "mcp",  # assuming your module is published or locally linkable
+  "mcp",  # assuming your module is published or locally linkable,
+  "graphene",
   "SilvaEngine-DynamoDB-Base",
   "SilvaEngine-Utility",
 ]
