@@ -22,9 +22,9 @@ class InsertUpdateMcpFunctionCall(Mutation):
 
     class Arguments:
         mcp_function_call_uuid = String(required=False)
-        name = String(required=True)
-        mcp_type = String(required=True)
-        arguments = JSON(required=True)
+        name = String(required=False)
+        mcp_type = String(required=False)
+        arguments = JSON(required=False)
         content = String(required=False)
         status = String(required=False)
         notes = String(required=False)
