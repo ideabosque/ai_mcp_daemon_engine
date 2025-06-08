@@ -7,6 +7,8 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "mcp",  # assuming your module is published or locally linkable
+  "SilvaEngine-DynamoDB-Base",
+  "SilvaEngine-Utility",
 ]
 
 [project.scripts]
