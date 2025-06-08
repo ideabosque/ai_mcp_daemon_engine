@@ -5,9 +5,12 @@ from __future__ import print_function
 __author__ = "bibow"
 
 import functools
+import os
+import sys
 import traceback
+import zipfile
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, Optional
 
 from mcp.types import (
     EmbeddedResource,
@@ -185,6 +188,61 @@ def execute_decorator():
     return actual_decorator
 
 
+def module_exists(module_name: str) -> bool:
+    """Check if the module exists in the specified path."""
+    module_dir = os.path.join(Config.funct_extract_path, module_name)
+    if os.path.exists(module_dir) and os.path.isdir(module_dir):
+        Config.logger.info(
+            f"Module {module_name} found in {Config.funct_extract_path}."
+        )
+        return True
+    Config.logger.info(
+        f"Module {module_name} not found in {Config.funct_extract_path}."
+    )
+    return False
+
+
+def download_and_extract_module(module_name: str) -> None:
+    """Download and extract the module from S3 if not already extracted."""
+    key = f"{module_name}.zip"
+    zip_path = f"{Config.funct_zip_path}/{key}"
+
+    Config.logger.info(
+        f"Downloading module from S3: bucket={Config.funct_bucket_name}, key={key}"
+    )
+    Config.aws_s3.download_file(Config.funct_bucket_name, key, zip_path)
+    Config.logger.info(f"Downloaded {key} from S3 to {zip_path}")
+
+    # Extract the ZIP file
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall(Config.funct_extract_path)
+    Config.logger.info(f"Extracted module to {Config.funct_extract_path}")
+
+
+def get_function(
+    module_name: str, function_name: str, source=None
+) -> Optional[Callable]:
+    try:
+        if source is None:
+            return getattr(__import__(module_name), function_name)
+
+        if not module_exists(module_name):
+            # Download and extract the module if it doesn't exist
+            download_and_extract_module(module_name)
+
+        # Add the extracted module to sys.path
+        module_path = f"{Config.funct_extract_path}/{module_name}"
+        if module_path not in sys.path:
+            sys.path.append(module_path)
+
+        return getattr(__import__(module_name), function_name)
+
+    except Exception as e:
+        log = traceback.format_exc()
+        Config.logger.error(log)
+        raise e
+
+
 @execute_decorator()
 def execute_tool_function(
     endpoint_id: str,
@@ -220,8 +278,10 @@ def execute_tool_function(
             {},
         )
 
-        tool_function = getattr(
-            __import__(tool_module["module_name"]), tool_module["function_name"]
+        tool_function = get_function(
+            tool_module["module_name"],
+            tool_module["function_name"],
+            source=tool_module.get("source"),
         )
         result = tool_function(Config.logger, tool_module["setting"], **arguments)
         if tool_module["return_type"] == "text":
@@ -263,9 +323,12 @@ def execute_resource_function(
             {},
         )
 
-        resource_function = getattr(
-            __import__(resource_module["module_name"]), resource_module["function_name"]
+        resource_function = get_function(
+            resource_module["module_name"],
+            resource_module["function_name"],
+            source=resource_module.get("source"),
         )
+
         result = resource_function(Config.logger, resource_module["setting"], uri)
         return result
 
@@ -310,9 +373,12 @@ def execute_prompt_function(
             {},
         )
 
-        prompt_function = getattr(
-            __import__(prompt_module["module_name"]), prompt_module["function_name"]
+        prompt_function = get_function(
+            prompt_module["module_name"],
+            prompt_module["function_name"],
+            source=prompt_module.get("source"),
         )
+
         result = prompt_function(
             Config.logger, prompt_module["setting"], name, **arguments
         )

@@ -5,7 +5,10 @@ __author__ = "bibow"
 
 import asyncio
 import logging
+import os
 from typing import Any, Dict
+
+import boto3
 
 from silvaengine_utility import Utility
 
@@ -60,8 +63,12 @@ class Config:
     transport = None
     port = None
     mcp_configuration = {}
+    funct_bucket_name = None
+    funct_zip_path = None
+    funct_extract_path = None
     logger = None
     mcp_core_engine = None
+    aws_s3 = None
 
     @classmethod
     def initialize(cls, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
@@ -74,7 +81,7 @@ class Config:
         try:
             cls.logger = logger
             cls._set_parameters(setting)
-            cls._initialize_mcp_core_engine(logger, setting)
+            cls._initialize_mcp_core_engine_aws_services(logger, setting)
             if setting.get("test_mode") == "local_for_all":
                 cls._initialize_tables(logger)
             logger.info("Configuration initialized successfully.")
@@ -98,7 +105,15 @@ class Config:
             cls.mcp_configuration["default"] = setting["mcp_configuration"]
 
     @classmethod
-    def _initialize_mcp_core_engine(
+    def _setup_function_paths(cls, setting: Dict[str, Any]) -> None:
+        cls.funct_bucket_name = setting.get("funct_bucket_name")
+        cls.funct_zip_path = setting.get("funct_zip_path", "/tmp/funct_zips")
+        cls.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
+        os.makedirs(cls.funct_zip_path, exist_ok=True)
+        os.makedirs(cls.funct_extract_path, exist_ok=True)
+
+    @classmethod
+    def _initialize_mcp_core_engine_aws_services(
         cls, logger: logging.Logger, setting: Dict[str, Any]
     ) -> None:
         """
@@ -111,6 +126,14 @@ class Config:
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
             cls.mcp_core_engine = MCPCoreEngine(logger, **setting)
+            cls.aws_s3 = boto3.client(
+                "s3",
+                **{
+                    "region_name": setting["region_name"],
+                    "aws_access_key_id": setting["aws_access_key_id"],
+                    "aws_secret_access_key": setting["aws_secret_access_key"],
+                },
+            )
 
     @classmethod
     def _initialize_tables(cls, logger: logging.Logger) -> None:
@@ -119,6 +142,13 @@ class Config:
         This is an internal method used during configuration setup.
         """
         utils._initialize_tables(logger)
+
+    def _setup_function_paths(cls, setting: Dict[str, Any]) -> None:
+        cls.funct_bucket_name = setting.get("funct_bucket_name")
+        cls.funct_zip_path = setting.get("funct_zip_path", "/tmp/funct_zips")
+        cls.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
+        os.makedirs(cls.funct_zip_path, exist_ok=True)
+        os.makedirs(cls.funct_extract_path, exist_ok=True)
 
     # Fetches and caches GraphQL schema for a given function
     @classmethod
