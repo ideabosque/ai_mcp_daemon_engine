@@ -44,9 +44,6 @@ def type_class():
 class Query(ObjectType):
     ping = String()
 
-    def resolve_ping(self, info: ResolveInfo) -> str:
-        return f"Hello at {time.strftime('%X')}!!"
-
     mcp_function = Field(
         MCPFunctionType,
         name=String(required=True),
