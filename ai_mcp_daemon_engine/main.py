@@ -12,6 +12,7 @@ import sys
 from typing import Any, Dict, List
 
 import uvicorn
+from pyngrok import ngrok
 
 from .handlers.config import Config
 from .handlers.mcp_server_app import app, run_stdio
@@ -25,6 +26,8 @@ class AIMCPDaemonEngine(object):
 
         self.transport = setting["transport"]
         self.port = setting["port"]
+        self.use_ngrok = setting.get("use_ngrok", "False") == "True"
+        self.ngrok_authtoken = setting.get("ngrok_authtoken", None)
         self.logger = logger
 
     def run(self):
@@ -43,6 +46,13 @@ class AIMCPDaemonEngine(object):
 
     def run_sse(self):
         """Run SSE server using uvicorn."""
+        public_url = None
+        if self.use_ngrok and self.ngrok_authtoken:
+            public_url = ngrok.connect(self.port, bind_tls=True).public_url
+            self.logger.info(
+                f"🔗  ngrok tunnel open at {public_url} → http://127.0.0.1:{self.port}"
+            )
+
         config = uvicorn.Config(
             app=app,
             host="0.0.0.0",
@@ -84,6 +94,8 @@ def main():
             "region_name": os.getenv("REGION_NAME"),
             "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
             "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
-        }
+            "use_ngrok": os.getenv("USE_NGROK", "False"),
+            "ngrok_authtoken": os.getenv("NGROK_AUTHTOKEN", None),
+        },
     )
     daemon.run()
