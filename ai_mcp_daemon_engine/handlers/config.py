@@ -4,11 +4,16 @@ from __future__ import print_function
 __author__ = "bibow"
 
 import asyncio
+import json
 import logging
 import os
-from typing import Any, Dict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List
 
 import boto3
+from passlib.context import CryptContext
+from pydantic import AnyUrl
 
 from silvaengine_utility import Utility
 
@@ -51,6 +56,19 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
 }"""
 
 
+_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+@dataclass
+class LocalUser:
+    username: str
+    password_hash: str
+    roles: List[str]
+
+    def verify(self, plain: str) -> bool:
+        return _pwd.verify(plain, self.password_hash)
+
+
 class Config:
     """
     Centralized Configuration Class
@@ -70,6 +88,29 @@ class Config:
     mcp_core_engine = None
     aws_s3 = None
 
+    # ----------------- universal -----------------
+    auth_provider: str = None  # "local" | "cognito"
+
+    # -------- local-JWT (HS256) settings ---------
+    jwt_secret_key: str = None
+    jwt_algorithm: str = None
+    access_token_exp: int = None  # minutes
+
+    # local users file
+    local_user_file: str = None
+    _USERS = None
+
+    # static super-admin
+    admin_username: str | None = None
+    admin_password: str | None = None
+    admin_static_token: str | None = None
+
+    # ------------- Cognito settings --------------
+    issuer = None
+    cognito_app_client_id: str | None = None
+    jwks_endpoint: AnyUrl | None = None
+    jwks_cache_ttl: int = None  # seconds
+
     @classmethod
     def initialize(cls, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
         """
@@ -81,6 +122,7 @@ class Config:
         try:
             cls.logger = logger
             cls._set_parameters(setting)
+            cls._USERS = cls._load()
             cls._initialize_mcp_core_engine_aws_services(logger, setting)
             if setting.get("test_mode") == "local_for_all":
                 cls._initialize_tables(logger)
@@ -103,6 +145,17 @@ class Config:
         if setting["mcp_configuration"] is not None:
             cls.logger.info("MCP Configuration loaded successfully.")
             cls.mcp_configuration["default"] = setting["mcp_configuration"]
+
+        cls.auth_provider = setting.get("auth_provider", "local")  # "local" | "cognito"
+        cls.jwt_secret_key = setting.get("jwt_secret_key", "CHANGEME")
+        cls.jwt_algorithm = setting.get("jwt_algorithm", "HS256")
+        cls.access_token_exp = int(setting.get("access_token_exp", 15))
+        cls.local_user_file = setting.get("local_user_file", "users.json")
+        cls.admin_username = setting.get("admin_username", "admin")
+        cls.admin_password = setting.get("admin_password", "admin123")
+        cls.admin_static_token = setting.get("admin_static_token", None)
+        cls.cognito_app_client_id = setting.get("cognito_app_client_id", None)
+        cls.jwks_cache_ttl = int(setting.get("jwks_cache_ttl", 3600))
 
     @classmethod
     def _setup_function_paths(cls, setting: Dict[str, Any]) -> None:
@@ -135,6 +188,15 @@ class Config:
                 },
             )
 
+        if (
+            all(setting.get(k) for k in ["region_name", "cognito_user_pool_id"])
+            and cls.auth_provider == "cognito"
+        ):
+            cls.issuer = f"https://cognito-idp.{setting['region_name']}.amazonaws.com/{setting['cognito_user_pool_id']}"
+            cls.jwks_endpoint = (
+                setting.get("cognito_jwks_url") or f"{cls.issuer}/.well-known/jwks.json"
+            )
+
     @classmethod
     def _initialize_tables(cls, logger: logging.Logger) -> None:
         """
@@ -149,6 +211,13 @@ class Config:
         cls.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
         os.makedirs(cls.funct_zip_path, exist_ok=True)
         os.makedirs(cls.funct_extract_path, exist_ok=True)
+
+    @classmethod
+    def _load(cls) -> dict[str, LocalUser]:
+        p = Path(cls.local_user_file).expanduser()
+        with p.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        return {u["username"]: LocalUser(**u) for u in raw}
 
     # Fetches and caches GraphQL schema for a given function
     @classmethod

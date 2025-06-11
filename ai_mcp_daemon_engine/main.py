@@ -9,12 +9,14 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import uvicorn
 
+from .handlers.auth_router import router as local_auth_router
 from .handlers.config import Config
 from .handlers.mcp_server_app import app, run_stdio
+from .handlers.middleware import FlexJWTMiddleware
 
 
 class AIMCPDaemonEngine(object):
@@ -23,10 +25,14 @@ class AIMCPDaemonEngine(object):
         # Initialize configuration via the Config class
         Config.initialize(logger, **setting)
 
+        # JWT guard second
+        app.add_middleware(FlexJWTMiddleware, public_paths=["/health"])
+        # mount /auth routes only for local mode
+        if Config.auth_provider == "local":
+            app.include_router(local_auth_router)
+
         self.transport = setting["transport"]
         self.port = setting["port"]
-        self.use_ngrok = setting.get("use_ngrok", "False") == "True"
-        self.ngrok_authtoken = setting.get("ngrok_authtoken", None)
         self.logger = logger
 
     def run(self):

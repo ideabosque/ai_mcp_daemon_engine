@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -333,6 +333,26 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "sse_clients": len(Config.sse_clients),
     }
+
+
+# # show admin token once (local mode only)
+# @app.on_event("startup")
+# def _print_admin():
+#     if Config.auth_provider == "local":
+#         get_or_create_admin_token()
+
+
+# helper
+def current_user(request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+@app.get("/me")
+def me(user=Depends(current_user)):
+    return user
 
 
 @app.get("/{endpoint_id}")
