@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 import uvicorn
 
-from .handlers.auth_router import router as local_auth_router
+from .handlers.auth_router import router as auth_router
 from .handlers.config import Config
 from .handlers.mcp_server_app import app, run_stdio
 from .handlers.middleware import FlexJWTMiddleware
@@ -27,9 +27,8 @@ class AIMCPDaemonEngine(object):
 
         # JWT guard second
         app.add_middleware(FlexJWTMiddleware, public_paths=["/health"])
-        # mount /auth routes only for local mode
-        if Config.auth_provider == "local":
-            app.include_router(local_auth_router)
+        # mount /auth routes
+        app.include_router(auth_router)
 
         self.transport = setting["transport"]
         self.port = setting["port"]
@@ -77,6 +76,9 @@ def main():
     daemon = AIMCPDaemonEngine(
         logger,
         **{
+            "region_name": os.getenv("REGION_NAME"),
+            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
             "transport": os.getenv("MCP_TRANSPORT", "sse").lower(),
             "port": int(os.getenv("PORT", "8000")),
             "mcp_configuration": (
@@ -89,9 +91,12 @@ def main():
                 if os.getenv("MCP_CONFIG_FILE")
                 else None
             ),
-            "region_name": os.getenv("REGION_NAME"),
-            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
-            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "auth_provider": os.getenv("AUTH_PROVIDER", "local").lower(),
+            "local_user_file": os.getenv("LOCAL_USER_FILE"),
+            "admin_static_token": os.getenv("ADMIN_STATIC_TOKEN"),
+            "cognito_user_pool_id": os.getenv("COGNITO_USER_POOL_ID"),
+            "cognito_app_client_id": os.getenv("COGNITO_APP_CLIENT_ID"),
+            "cognito_app_secret": os.getenv("COGNITO_APP_SECRET"),
         },
     )
     daemon.run()

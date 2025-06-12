@@ -87,6 +87,7 @@ class Config:
     logger = None
     mcp_core_engine = None
     aws_s3 = None
+    aws_cognito_idp = None
 
     # ----------------- universal -----------------
     auth_provider: str = None  # "local" | "cognito"
@@ -108,6 +109,7 @@ class Config:
     # ------------- Cognito settings --------------
     issuer = None
     cognito_app_client_id: str | None = None
+    cognito_app_secret: str | None = None
     jwks_endpoint: AnyUrl | None = None
     jwks_cache_ttl: int = None  # seconds
 
@@ -123,7 +125,8 @@ class Config:
             cls.logger = logger
             cls._set_parameters(setting)
             cls._USERS = cls._load()
-            cls._initialize_mcp_core_engine_aws_services(logger, setting)
+            cls._initialize_mcp_core_engine(logger, setting)
+            cls._initialize_aws_services(logger, setting)
             if setting.get("test_mode") == "local_for_all":
                 cls._initialize_tables(logger)
             logger.info("Configuration initialized successfully.")
@@ -155,6 +158,7 @@ class Config:
         cls.admin_password = setting.get("admin_password", "admin123")
         cls.admin_static_token = setting.get("admin_static_token", None)
         cls.cognito_app_client_id = setting.get("cognito_app_client_id", None)
+        cls.cognito_app_secret = setting.get("cognito_app_secret", None)
         cls.jwks_cache_ttl = int(setting.get("jwks_cache_ttl", 3600))
 
     @classmethod
@@ -166,36 +170,60 @@ class Config:
         os.makedirs(cls.funct_extract_path, exist_ok=True)
 
     @classmethod
-    def _initialize_mcp_core_engine_aws_services(
+    def _initialize_mcp_core_engine(
         cls, logger: logging.Logger, setting: Dict[str, Any]
     ) -> None:
         """
-        Initialize AWS services, such as the S3 client.
+        Initialize MCP Core Engine with AWS credentials.
         Args:
-            setting (Dict[str, Any]): Configuration dictionary.
+            logger (logging.Logger): Logger instance for logging
+            setting (Dict[str, Any]): Configuration dictionary containing AWS credentials
         """
         if all(
             setting.get(k)
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
             cls.mcp_core_engine = MCPCoreEngine(logger, **setting)
-            cls.aws_s3 = boto3.client(
-                "s3",
-                **{
-                    "region_name": setting["region_name"],
-                    "aws_access_key_id": setting["aws_access_key_id"],
-                    "aws_secret_access_key": setting["aws_secret_access_key"],
-                },
-            )
 
-        if (
-            all(setting.get(k) for k in ["region_name", "cognito_user_pool_id"])
-            and cls.auth_provider == "cognito"
-        ):
-            cls.issuer = f"https://cognito-idp.{setting['region_name']}.amazonaws.com/{setting['cognito_user_pool_id']}"
-            cls.jwks_endpoint = (
-                setting.get("cognito_jwks_url") or f"{cls.issuer}/.well-known/jwks.json"
-            )
+    @classmethod
+    def _initialize_aws_services(
+        cls, logger: logging.Logger, setting: Dict[str, Any]
+    ) -> None:
+        """
+        Initialize AWS services including S3 and Cognito IDP clients.
+        Args:
+            logger (logging.Logger): Logger instance for logging
+            setting (Dict[str, Any]): Configuration dictionary containing AWS credentials and settings
+        """
+        try:
+            if all(
+                setting.get(k)
+                for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
+            ):
+                cls.aws_s3 = boto3.client(
+                    "s3",
+                    **{
+                        "region_name": setting["region_name"],
+                        "aws_access_key_id": setting["aws_access_key_id"],
+                        "aws_secret_access_key": setting["aws_secret_access_key"],
+                    },
+                )
+
+            if (
+                all(setting.get(k) for k in ["region_name", "cognito_user_pool_id"])
+                and cls.auth_provider == "cognito"
+            ):
+                cls.issuer = f"https://cognito-idp.{setting['region_name']}.amazonaws.com/{setting['cognito_user_pool_id']}"
+                cls.jwks_endpoint = (
+                    setting.get("cognito_jwks_url")
+                    or f"{cls.issuer}/.well-known/jwks.json"
+                )
+                cls.aws_cognito_idp = boto3.client(
+                    "cognito-idp", region_name=setting["region_name"]
+                )
+        except Exception as e:
+            logger.exception("Failed to initialize AWS services configuration.")
+            raise e
 
     @classmethod
     def _initialize_tables(cls, logger: logging.Logger) -> None:
