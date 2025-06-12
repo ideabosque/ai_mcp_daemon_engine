@@ -50,7 +50,7 @@ def get_local_token(username: str, password: str) -> Dict[str, Any]:
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_local_jwt({"sub": user.username, "roles": user.roles})
+    token = create_local_jwt({"username": user.username, "roles": user.roles})
     return {"access_token": token, "token_type": "bearer"}
 
 

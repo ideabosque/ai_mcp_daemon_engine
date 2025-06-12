@@ -97,6 +97,10 @@ def main():
             "cognito_user_pool_id": os.getenv("COGNITO_USER_POOL_ID"),
             "cognito_app_client_id": os.getenv("COGNITO_APP_CLIENT_ID"),
             "cognito_app_secret": os.getenv("COGNITO_APP_SECRET"),
+            "cognito_jwks_url": os.getenv("COGNITO_JWKS_URL"),
+            "funct_bucket_name": os.getenv("FUNCT_BUCKET_NAME"),
+            "funct_zip_path": os.getenv("FUNCT_ZIP_PATH"),
+            "funct_extract_path": os.getenv("FUNCT_EXTRACT_PATH"),
         },
     )
     daemon.run()

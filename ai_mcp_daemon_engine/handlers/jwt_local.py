@@ -55,7 +55,7 @@ def get_or_create_admin_token() -> str:
     if Config.admin_static_token:
         return Config.admin_static_token
     token = create_local_jwt(
-        {"sub": Config.admin_username, "role": "admin"}, forever=True
+        {"username": Config.admin_username, "role": "admin"}, forever=True
     )
     Config.logger.info(f"🔑  Generated static admin token:\n   {token}")
     return token

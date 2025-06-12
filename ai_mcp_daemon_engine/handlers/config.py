@@ -77,7 +77,7 @@ class Config:
 
     # === SSE Client Registry ===
     sse_clients: Dict[int, asyncio.Queue] = None
-    client_id_counter = None
+    user_clients: dict[str, set[int]] = None
     transport = None
     port = None
     mcp_configuration = {}
@@ -142,7 +142,7 @@ class Config:
             setting (Dict[str, Any]): Configuration dictionary.
         """
         cls.sse_clients = {}
-        cls.client_id_counter = 0
+        cls.user_clients = {}
         cls.transport = setting["transport"]
         cls.port = setting["port"]
         if setting["mcp_configuration"] is not None:

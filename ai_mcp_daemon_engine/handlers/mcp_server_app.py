@@ -8,8 +8,10 @@ import asyncio
 import json
 import logging
 import sys
+from collections import deque
 from datetime import datetime
-from typing import Any, AsyncGenerator, Dict
+from itertools import count
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -37,6 +39,11 @@ from .mcp_utility import (
     execute_tool_function,
 )
 
+# === SSE State ===
+client_id_seq = count(1)  # atomic client‑id generator
+message_id_seq = count(1)  # atomic message‑id generator
+message_history: deque[dict] = deque(maxlen=1000)  # replay buffer
+
 # === FastAPI and MCP Initialization ===
 server = Server("MCP SSE Server")
 app = FastAPI(title="MCP SSE Server")
@@ -52,15 +59,17 @@ app.add_middleware(
 
 # === Tool Definitions ===
 @server.list_tools()
-async def list_tools(endpoint_id: str) -> list[Tool]:
+async def list_tools(endpoint_id: str) -> List[Tool]:
+    """List available tools for the given endpoint"""
     tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
     return [Tool(**tool) for tool in tools]
 
 
 @server.call_tool()
 async def call_tool(
-    endpoint_id: str, name: str, arguments: dict[str, Any] | None
-) -> list[TextContent | ImageContent | EmbeddedResource]:
+    endpoint_id: str, name: str, arguments: Optional[Dict[str, Any]]
+) -> List[Union[TextContent, ImageContent, EmbeddedResource]]:
+    """Call a specific tool with given arguments"""
     tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
     if not any(tool["name"] == name for tool in tools):
         raise ValueError(f"Unknown tool: {name}")
@@ -69,7 +78,8 @@ async def call_tool(
 
 
 @server.list_resources()
-async def list_resources(endpoint_id: str) -> list[Resource]:
+async def list_resources(endpoint_id: str) -> List[Resource]:
+    """List available resources for the given endpoint"""
     resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
 
     return [Resource(**resource) for resource in resources]
@@ -77,6 +87,7 @@ async def list_resources(endpoint_id: str) -> list[Resource]:
 
 @server.read_resource()
 async def read_resource(endpoint_id: str, uri: str) -> str:
+    """Read content of a specific resource"""
     resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
     if not any(resource["uri"] == uri for resource in resources):
         raise ValueError(f"Unknown resource: {uri}")
@@ -85,7 +96,8 @@ async def read_resource(endpoint_id: str, uri: str) -> str:
 
 
 @server.list_prompts()
-async def list_prompts(endpoint_id: str) -> list[Prompt]:
+async def list_prompts(endpoint_id: str) -> List[Prompt]:
+    """List available prompts for the given endpoint"""
     prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
 
     return [
@@ -100,8 +112,9 @@ async def list_prompts(endpoint_id: str) -> list[Prompt]:
 
 @server.get_prompt()
 async def get_prompt(
-    endpoint_id: str, name: str, arguments: dict[str, str] | None
+    endpoint_id: str, name: str, arguments: Optional[Dict[str, str]]
 ) -> GetPromptResult:
+    """Get a specific prompt with given arguments"""
     prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
     if not any(prompt["name"] == name for prompt in prompts):
         raise ValueError(f"Unknown prompt: {name}")
@@ -110,7 +123,8 @@ async def get_prompt(
 
 
 # === MCP Message Handling ===
-async def process_stream_message(endpoint_id: str, message: dict) -> dict:
+async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
+    """Process incoming MCP messages"""
     try:
         method = message.get("method")
         params = message.get("params", {})
@@ -238,8 +252,9 @@ async def process_stream_message(endpoint_id: str, message: dict) -> dict:
 
 # === SSE Event Generator ===
 async def sse_event_generator(
-    request: Request, client_id: int, queue: asyncio.Queue
+    request: Request, client_id: int, username: str, queue: asyncio.Queue
 ) -> AsyncGenerator[str, None]:
+    """Generate SSE events for connected clients"""
     yield f"event: connected\ndata: {json.dumps({'client_id': client_id, 'timestamp': datetime.now().isoformat()})}\n\n"
     try:
         while not await request.is_disconnected():
@@ -250,23 +265,96 @@ async def sse_event_generator(
                 yield f"event: heartbeat\ndata: {json.dumps({'client_id': client_id, 'timestamp': datetime.now().isoformat()})}\n\n"
     finally:
         Config.sse_clients.pop(client_id, None)
+        cids = Config.user_clients.get(username, set())
+        cids.discard(client_id)
+        if not cids:
+            Config.user_clients.pop(username, None)
+
+
+# === Broadcast Logic ===
+async def broadcast_to_clients(message: Dict) -> None:
+    """Send an event to all connected clients and record it for replay"""
+    message_id = next(message_id_seq)
+    message_with_id = dict(message, id=message_id)
+    message_history.append(message_with_id)
+
+    dead_clients = []
+    for client_id, queue in list(Config.sse_clients.items()):
+        try:
+            await queue.put(message_with_id)
+        except asyncio.QueueFull:
+            dead_clients.append(client_id)
+    for cid in dead_clients:
+        Config.sse_clients.pop(cid, None)
+
+
+async def send_to_client(cid: int, message: Dict[str, Any]) -> bool:
+    """Unicast a message to one client, with id-stamping & replay tracking"""
+    message_id = next(message_id_seq)
+    message_with_id = dict(message, id=message_id)
+    message_history.append(message_with_id)
+
+    q = Config.sse_clients.get(cid)
+    if not q:
+        return False
+    try:
+        q.put_nowait(message_with_id)
+        return True
+    except asyncio.QueueFull:
+        Config.sse_clients.pop(cid, None)
+        Config.logger.warning("Queue full – evict client %s", cid)
+        return False
+
+
+async def send_to_user(username: str, message: dict[str, Any]) -> bool:
+    """Send a message to *all* live connections for a user."""
+    cids = Config.user_clients.get(username)
+    if not cids:
+        return False
+    delivered = False
+    for cid in set(cids):  # copy to avoid set-size change
+        ok = await send_to_client(cid, message)
+        delivered = delivered or ok
+    return delivered
+
+
+def current_user(request: Request) -> Dict:
+    """Get current authenticated user"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+@app.get("/me")
+def me(user: Dict = Depends(current_user)) -> Dict:
+    """Get current user info"""
+    return user
 
 
 # === GET /sse Endpoint ===
 @app.get("/{endpoint_id}/sse")
 async def get_sse_stream(
-    endpoint_id: str, request: Request, origin: str = Header(None)
-):
+    endpoint_id: str,
+    request: Request,
+    user: Dict = Depends(current_user),
+    origin: str = Header(None),
+) -> StreamingResponse:
+    """Handle SSE stream connections"""
     # Validate Origin header to prevent DNS rebinding attacks
     # if origin != "http://your-allowed-origin.com":  # Replace with your allowed origin
     #     raise HTTPException(status_code=403, detail="Forbidden")
 
-    Config.client_id_counter += 1
-    client_id = Config.client_id_counter
+    client_id = next(client_id_seq)
     queue = asyncio.Queue(maxsize=100)
+    last_event_id = request.headers.get("last-event-id")
+    if last_event_id and last_event_id.isdigit():
+        missed = [m for m in message_history if m["id"] > int(last_event_id)]
+        for m in missed:
+            await queue.put(m)
     Config.sse_clients[client_id] = queue
+    Config.user_clients.setdefault(user["username"], set()).add(client_id)
 
-    # Send initial protocol metadata
     metadata = {
         "type": "mcp_activity",
         "method": "initialize",
@@ -284,38 +372,35 @@ async def get_sse_stream(
     }
     await queue.put(metadata)
 
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+    }
     return StreamingResponse(
-        sse_event_generator(request, client_id, queue), media_type="text/event-stream"
+        sse_event_generator(request, client_id, user["username"], queue),
+        media_type="text/event-stream",
+        headers=headers,
     )
 
 
-# === POST /sse Endpoint ===
-@app.post("/{endpoint_id}/sse")
-async def post_sse_message(endpoint_id: str, request: Request):
-    return await post_stream_message(endpoint_id, request)
-
-
-# === MCP Endpoint ===
 @app.post("/{endpoint_id}/mcp")
-async def post_mcp_message(endpoint_id: str, request: Request):
-    return await post_stream_message(endpoint_id, request)
-
-
-async def post_stream_message(endpoint_id: str, request: Request):
+async def post_mcp_message(
+    endpoint_id: str, request: Request, user: Dict = Depends(current_user)
+) -> Dict:
+    """Handle MCP protocol messages"""
     try:
         message = await request.json()
-        response = await process_stream_message(endpoint_id, message)
-        # if message.get("method") in {"tools/call", "resources/read", "prompts/get"}:
-        await broadcast_to_clients(
+        response = await process_mcp_message(endpoint_id, message)
+        await send_to_user(
+            user["username"],
             {
                 "type": "mcp_activity",
                 "method": message["method"],
                 "request": jsonable_encoder(message),
                 "response": jsonable_encoder(response),
                 "timestamp": datetime.now().isoformat(),
-            }
+            },
         )
-
         return response
     except Exception as e:
         return {
@@ -327,7 +412,8 @@ async def post_stream_message(endpoint_id: str, request: Request):
 
 # === Diagnostics ===
 @app.get("/health")
-async def health_check():
+async def health_check() -> Dict[str, Any]:
+    """Check server health status"""
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -335,28 +421,9 @@ async def health_check():
     }
 
 
-# # show admin token once (local mode only)
-# @app.on_event("startup")
-# def _print_admin():
-#     if Config.auth_provider == "local":
-#         get_or_create_admin_token()
-
-
-# helper
-def current_user(request: Request):
-    user = getattr(request.state, "user", None)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
-
-
-@app.get("/me")
-def me(user=Depends(current_user)):
-    return user
-
-
 @app.get("/{endpoint_id}")
 async def root(endpoint_id: str) -> Dict[str, Any]:
+    """Get endpoint info including tools, resources and prompts"""
     tools = await list_tools(endpoint_id)
     resources = await list_resources(endpoint_id)
     prompts = await list_prompts(endpoint_id)
@@ -372,30 +439,22 @@ async def root(endpoint_id: str) -> Dict[str, Any]:
 
 # === GraphQL Endpoint ===
 @app.post("/{endpoint_id}/mcp_core_graphql")
-async def mcp_core_graphql(endpoint_id: str, request: Request):
+async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
+    """Handle GraphQL queries"""
     params = await request.json()
     params.update({"endpoint_id": endpoint_id})
 
     return Utility.json_loads(Config.mcp_core_engine.mcp_core_graphql(**params))
 
 
-# === Broadcast Logic ===
-async def broadcast_to_clients(message: dict):
-    for client_id, queue in list(Config.sse_clients.items()):
-        try:
-            queue.put_nowait(message)
-        except asyncio.QueueFull:
-            Config.sse_clients.pop(client_id, None)
-
-
-async def run_stdio(logger: logging.Logger):
+async def run_stdio(logger: logging.Logger) -> None:
     """Run MCP server with stdio transport"""
     logger.info("Starting MCP Server with stdio transport...")
 
     try:
         async with stdio_server() as (read_stream, write_stream):
-            await Config.server.run(
-                read_stream, write_stream, Config.server.create_initialization_options()
+            await server.run(
+                read_stream, write_stream, server.create_initialization_options()
             )
     except Exception as e:
         logger.error(f"Stdio server error: {e}")
