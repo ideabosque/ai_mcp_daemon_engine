@@ -9,12 +9,14 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import uvicorn
 
+from .handlers.auth_router import router as auth_router
 from .handlers.config import Config
 from .handlers.mcp_server_app import app, run_stdio
+from .handlers.middleware import FlexJWTMiddleware
 
 
 class AIMCPDaemonEngine(object):
@@ -23,10 +25,13 @@ class AIMCPDaemonEngine(object):
         # Initialize configuration via the Config class
         Config.initialize(logger, **setting)
 
+        # JWT guard second
+        app.add_middleware(FlexJWTMiddleware, public_paths=["/health"])
+        # mount /auth routes
+        app.include_router(auth_router)
+
         self.transport = setting["transport"]
         self.port = setting["port"]
-        self.use_ngrok = setting.get("use_ngrok", "False") == "True"
-        self.ngrok_authtoken = setting.get("ngrok_authtoken", None)
         self.logger = logger
 
     def run(self):
@@ -71,6 +76,9 @@ def main():
     daemon = AIMCPDaemonEngine(
         logger,
         **{
+            "region_name": os.getenv("REGION_NAME"),
+            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
             "transport": os.getenv("MCP_TRANSPORT", "sse").lower(),
             "port": int(os.getenv("PORT", "8000")),
             "mcp_configuration": (
@@ -83,9 +91,16 @@ def main():
                 if os.getenv("MCP_CONFIG_FILE")
                 else None
             ),
-            "region_name": os.getenv("REGION_NAME"),
-            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
-            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "auth_provider": os.getenv("AUTH_PROVIDER", "local").lower(),
+            "local_user_file": os.getenv("LOCAL_USER_FILE"),
+            "admin_static_token": os.getenv("ADMIN_STATIC_TOKEN"),
+            "cognito_user_pool_id": os.getenv("COGNITO_USER_POOL_ID"),
+            "cognito_app_client_id": os.getenv("COGNITO_APP_CLIENT_ID"),
+            "cognito_app_secret": os.getenv("COGNITO_APP_SECRET"),
+            "cognito_jwks_url": os.getenv("COGNITO_JWKS_URL"),
+            "funct_bucket_name": os.getenv("FUNCT_BUCKET_NAME"),
+            "funct_zip_path": os.getenv("FUNCT_ZIP_PATH"),
+            "funct_extract_path": os.getenv("FUNCT_EXTRACT_PATH"),
         },
     )
     daemon.run()
