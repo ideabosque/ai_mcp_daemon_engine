@@ -15,7 +15,8 @@ import uvicorn
 
 from .handlers.auth_router import router as auth_router
 from .handlers.config import Config
-from .handlers.mcp_server_app import app, run_stdio
+from .handlers.mcp_app import app
+from .handlers.mcp_server import run_stdio
 from .handlers.middleware import FlexJWTMiddleware
 
 
