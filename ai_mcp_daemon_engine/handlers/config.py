@@ -170,7 +170,7 @@ class Config:
             else setting["funct_zip_path"]
         )
         cls.funct_extract_path = (
-            "funct_extract_path"
+            "/tmp/functs"
             if setting.get("funct_extract_path") is None
             else setting["funct_extract_path"]
         )
