@@ -164,8 +164,16 @@ class Config:
     @classmethod
     def _setup_function_paths(cls, setting: Dict[str, Any]) -> None:
         cls.funct_bucket_name = setting.get("funct_bucket_name")
-        cls.funct_zip_path = setting.get("funct_zip_path", "/tmp/funct_zips")
-        cls.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
+        cls.funct_zip_path = (
+            "/tmp/funct_zips"
+            if setting.get("funct_zip_path") is None
+            else setting["funct_zip_path"]
+        )
+        cls.funct_extract_path = (
+            "funct_extract_path"
+            if setting.get("funct_extract_path") is None
+            else setting["funct_extract_path"]
+        )
         os.makedirs(cls.funct_zip_path, exist_ok=True)
         os.makedirs(cls.funct_extract_path, exist_ok=True)
 
