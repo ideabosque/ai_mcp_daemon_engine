@@ -45,3 +45,9 @@ def verify_cognito_jwt(token: str) -> Dict[str, Any]:
             detail="Invalid Cognito JWT",
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e

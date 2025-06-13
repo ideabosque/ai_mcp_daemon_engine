@@ -47,6 +47,12 @@ def verify_local_jwt(token: str) -> Dict[str, Any]:
             detail=f"Invalid JWT ({e})",
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e
 
 
 # ── static admin token helper ────────────────────────────────────
