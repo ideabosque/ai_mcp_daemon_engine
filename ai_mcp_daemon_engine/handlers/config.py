@@ -124,6 +124,7 @@ class Config:
         try:
             cls.logger = logger
             cls._set_parameters(setting)
+            cls._setup_function_paths(setting)
             cls._USERS = cls._load()
             cls._initialize_mcp_core_engine(logger, setting)
             cls._initialize_aws_services(logger, setting)
@@ -167,11 +168,13 @@ class Config:
         cls.funct_zip_path = (
             "/tmp/funct_zips"
             if setting.get("funct_zip_path") is None
+            or setting.get("funct_zip_path") == ""
             else setting["funct_zip_path"]
         )
         cls.funct_extract_path = (
             "/tmp/functs"
             if setting.get("funct_extract_path") is None
+            or setting.get("funct_extract_path") == ""
             else setting["funct_extract_path"]
         )
         os.makedirs(cls.funct_zip_path, exist_ok=True)
@@ -240,13 +243,6 @@ class Config:
         This is an internal method used during configuration setup.
         """
         utils._initialize_tables(logger)
-
-    def _setup_function_paths(cls, setting: Dict[str, Any]) -> None:
-        cls.funct_bucket_name = setting.get("funct_bucket_name")
-        cls.funct_zip_path = setting.get("funct_zip_path", "/tmp/funct_zips")
-        cls.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
-        os.makedirs(cls.funct_zip_path, exist_ok=True)
-        os.makedirs(cls.funct_extract_path, exist_ok=True)
 
     @classmethod
     def _load(cls) -> dict[str, LocalUser]:
