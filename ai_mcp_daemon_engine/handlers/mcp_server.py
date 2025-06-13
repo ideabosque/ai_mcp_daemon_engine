@@ -88,7 +88,7 @@ async def list_prompts(endpoint_id: str) -> List[Prompt]:
 
 @server.get_prompt()
 async def get_prompt(
-    endpoint_id: str, name: str, arguments: Optional[Dict[str, str]]
+    endpoint_id: str, name: str, arguments: Optional[Dict[str, Any]]
 ) -> GetPromptResult:
     """Get a specific prompt with given arguments"""
     prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
@@ -99,7 +99,9 @@ async def get_prompt(
 
 
 # === MCP Message Handling ===
-async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
+async def process_mcp_message(
+    endpoint_id: str, message: Dict[str, Any]
+) -> Dict[str, Any]:
     """Process incoming MCP messages"""
     try:
         method = message.get("method")

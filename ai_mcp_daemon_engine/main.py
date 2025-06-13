@@ -16,7 +16,7 @@ import uvicorn
 from .handlers.auth_router import router as auth_router
 from .handlers.config import Config
 from .handlers.mcp_app import app
-from .handlers.mcp_server import run_stdio
+from .handlers.mcp_server import process_mcp_message, run_stdio
 from .handlers.middleware import FlexJWTMiddleware
 
 
@@ -35,36 +35,42 @@ class AIMCPDaemonEngine(object):
         self.port = setting["port"]
         self.logger = logger
 
-    def run(self):
+    def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
+        endpoint_id = params.pop("endpoint_id", None)
+        ## Test the waters 🧪 before diving in!
+        ##<--Testing Data-->##
+        if endpoint_id is None:
+            endpoint_id = self.setting.get("endpoint_id")
+        ##<--Testing Data-->##
+
+        return asyncio.run(process_mcp_message(endpoint_id, params))
+
+    def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
+        return Config.mcp_core_engine.mcp_core_graphql(**params)
+
+    def daemon(self):
         try:
             if self.transport == "sse":
                 self.logger.info("Running in SSE mode...")
-                self.run_sse()
+                """Run SSE server using uvicorn."""
+                config = uvicorn.Config(
+                    app=app,
+                    host="0.0.0.0",
+                    port=self.port,
+                    log_level="info",
+                    access_log=True,
+                    loop="asyncio",
+                )
+                server = uvicorn.Server(config)
+                asyncio.run(server.serve())
             else:
                 self.logger.info("Running in stdio mode...")
-                asyncio.run(self.run_stdio())
+                asyncio.run(run_stdio(self.logger))
         except KeyboardInterrupt:
             self.logger.info("Daemon interrupted by user.")
         except Exception as e:
             self.logger.exception("Fatal daemon error")
             sys.exit(1)
-
-    def run_sse(self):
-        """Run SSE server using uvicorn."""
-        config = uvicorn.Config(
-            app=app,
-            host="0.0.0.0",
-            port=self.port,
-            log_level="info",
-            access_log=True,
-            loop="asyncio",
-        )
-        server = uvicorn.Server(config)
-        asyncio.run(server.serve())
-
-    async def run_stdio(self):
-        """Delegate to the external stdio runner."""
-        await run_stdio(self.logger)
 
 
 def main():
@@ -74,13 +80,17 @@ def main():
     )
     logger = logging.getLogger()
 
-    daemon = AIMCPDaemonEngine(
+    transport = (
+        sys.argv[1] if len(sys.argv) > 1 else os.getenv("MCP_TRANSPORT", "sse").lower()
+    )
+
+    ai_mcp_daemon_engine = AIMCPDaemonEngine(
         logger,
         **{
             "region_name": os.getenv("REGION_NAME"),
             "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
             "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
-            "transport": os.getenv("MCP_TRANSPORT", "sse").lower(),
+            "transport": transport,
             "port": int(os.getenv("PORT", "8000")),
             "mcp_configuration": (
                 json.load(
@@ -104,4 +114,4 @@ def main():
             "funct_extract_path": os.getenv("FUNCT_EXTRACT_PATH"),
         },
     )
-    daemon.run()
+    ai_mcp_daemon_engine.daemon()
