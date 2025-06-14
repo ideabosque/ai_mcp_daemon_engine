@@ -9,15 +9,84 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import uvicorn
 
 from .handlers.auth_router import router as auth_router
 from .handlers.config import Config
-from .handlers.mcp_app import app
+from .handlers.mcp_app import app, process_mcp_message
 from .handlers.mcp_server import run_stdio
 from .handlers.middleware import FlexJWTMiddleware
+
+
+# Hook function applied to deployment
+def deploy() -> List:
+    return [
+        {
+            "service": "MCP Daemon",
+            "class": "AIMCPDaemonEngine",
+            "functions": {
+                "mcp_core_graphql": {
+                    "is_static": False,
+                    "label": "MCP Core GraphQL",
+                    "query": [
+                        {"action": "ping", "label": "Ping"},
+                        {
+                            "action": "mcpFunction",
+                            "label": "View MCP Function",
+                        },
+                        {
+                            "action": "mcpFunctionList",
+                            "label": "View MCP Function List",
+                        },
+                        {
+                            "action": "mcpFunctionCall",
+                            "label": "View MCP Function Call",
+                        },
+                        {
+                            "action": "mcpFunctionCallList",
+                            "label": "View MCP Function Call List",
+                        },
+                    ],
+                    "mutation": [
+                        {
+                            "action": "insertUpdateMcpFunction",
+                            "label": "Create Update MCP Function",
+                        },
+                        {
+                            "action": "deleteMcpFunction",
+                            "label": "Delete MCP Function",
+                        },
+                        {
+                            "action": "insertUpdateMcpFunctionCall",
+                            "label": "Create Update MCP Function Call",
+                        },
+                        {
+                            "action": "deleteMcpFunctionCall",
+                            "label": "Delete MCP Function Call",
+                        },
+                    ],
+                    "type": "RequestResponse",
+                    "support_methods": ["POST"],
+                    "is_auth_required": False,
+                    "is_graphql": True,
+                    "settings": "beta_core_ai_agent",
+                    "disabled_in_resources": True,  # Ignore adding to resource list.
+                },
+                "mcp": {
+                    "is_static": False,
+                    "label": "MCP Server",
+                    "type": "Event",
+                    "support_methods": ["POST", "GET"],
+                    "is_auth_required": False,
+                    "is_graphql": False,
+                    "settings": "beta_core_ai_agent",
+                    "disabled_in_resources": True,  # Ignore adding to resource list.
+                },
+            },
+        }
+    ]
 
 
 class AIMCPDaemonEngine(object):
@@ -35,36 +104,42 @@ class AIMCPDaemonEngine(object):
         self.port = setting["port"]
         self.logger = logger
 
-    def run(self):
+    def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
+        endpoint_id = params.pop("endpoint_id", None)
+        ## Test the waters 🧪 before diving in!
+        ##<--Testing Data-->##
+        if endpoint_id is None:
+            endpoint_id = self.setting.get("endpoint_id")
+        ##<--Testing Data-->##
+
+        return asyncio.run(process_mcp_message(endpoint_id, params))
+
+    def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
+        return Config.mcp_core.mcp_core_graphql(**params)
+
+    def daemon(self):
         try:
             if self.transport == "sse":
                 self.logger.info("Running in SSE mode...")
-                self.run_sse()
+                """Run SSE server using uvicorn."""
+                config = uvicorn.Config(
+                    app=app,
+                    host="0.0.0.0",
+                    port=self.port,
+                    log_level="info",
+                    access_log=True,
+                    loop="asyncio",
+                )
+                server = uvicorn.Server(config)
+                asyncio.run(server.serve())
             else:
                 self.logger.info("Running in stdio mode...")
-                asyncio.run(self.run_stdio())
+                asyncio.run(run_stdio(self.logger))
         except KeyboardInterrupt:
             self.logger.info("Daemon interrupted by user.")
         except Exception as e:
             self.logger.exception("Fatal daemon error")
             sys.exit(1)
-
-    def run_sse(self):
-        """Run SSE server using uvicorn."""
-        config = uvicorn.Config(
-            app=app,
-            host="0.0.0.0",
-            port=self.port,
-            log_level="info",
-            access_log=True,
-            loop="asyncio",
-        )
-        server = uvicorn.Server(config)
-        asyncio.run(server.serve())
-
-    async def run_stdio(self):
-        """Delegate to the external stdio runner."""
-        await run_stdio(self.logger)
 
 
 def main():
@@ -74,23 +149,24 @@ def main():
     )
     logger = logging.getLogger()
 
-    daemon = AIMCPDaemonEngine(
+    if len(sys.argv) > 1:
+        transport = "stdio"
+        mcp_config_file = sys.argv[1].lower()
+        logger.info(f"Using config file: {mcp_config_file}")
+    else:
+        transport = os.getenv("MCP_TRANSPORT", "sse").lower()
+        mcp_config_file = os.getenv("MCP_CONFIG_FILE", None)
+
+    ai_mcp_daemon_engine = AIMCPDaemonEngine(
         logger,
         **{
             "region_name": os.getenv("REGION_NAME"),
             "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
             "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
-            "transport": os.getenv("MCP_TRANSPORT", "sse").lower(),
+            "transport": transport,
             "port": int(os.getenv("PORT", "8000")),
             "mcp_configuration": (
-                json.load(
-                    open(
-                        os.getenv("MCP_CONFIG_FILE"),
-                        "r",
-                    )
-                )
-                if os.getenv("MCP_CONFIG_FILE")
-                else None
+                json.load(open(mcp_config_file, "r")) if mcp_config_file else None
             ),
             "auth_provider": os.getenv("AUTH_PROVIDER", "local").lower(),
             "local_user_file": os.getenv("LOCAL_USER_FILE"),
@@ -104,4 +180,4 @@ def main():
             "funct_extract_path": os.getenv("FUNCT_EXTRACT_PATH"),
         },
     )
-    daemon.run()
+    ai_mcp_daemon_engine.daemon()

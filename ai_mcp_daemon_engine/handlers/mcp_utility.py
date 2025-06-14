@@ -107,7 +107,7 @@ def execute_decorator():
                     Config.logger.info(
                         "Making GraphQL call to insert/update MCP function"
                     )
-                    response = Config.mcp_core_engine.mcp_core_graphql(
+                    response = Config.mcp_core.mcp_core_graphql(
                         **{
                             "endpoint_id": endpoint_id,
                             "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
@@ -139,7 +139,7 @@ def execute_decorator():
                     Config.logger.info(f"Function execution time: {time_spent}ms")
 
                     Config.logger.info("Updating MCP function call with results")
-                    response = Config.mcp_core_engine.mcp_core_graphql(
+                    response = Config.mcp_core.mcp_core_graphql(
                         **{
                             "endpoint_id": endpoint_id,
                             "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
@@ -167,7 +167,7 @@ def execute_decorator():
                 Config.logger.error(f"Error in MCP function execution: {log}")
                 if mcp_function_call is not None:
                     Config.logger.info("Updating MCP function call with error status")
-                    response = Config.mcp_core_engine.mcp_core_graphql(
+                    response = Config.mcp_core.mcp_core_graphql(
                         **{
                             "endpoint_id": mcp_function_call["endpointId"],
                             "query": INSERT_UPDATE_MCP_FUNCTION_CALL,

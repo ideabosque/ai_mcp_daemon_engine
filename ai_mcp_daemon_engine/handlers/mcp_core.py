@@ -5,7 +5,7 @@ from __future__ import print_function
 __author__ = "bibow"
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from graphene import Schema
 
@@ -14,7 +14,7 @@ from silvaengine_dynamodb_base import SilvaEngineDynamoDBBase
 from .schema import Mutations, Query, type_class
 
 
-class MCPCoreEngine(SilvaEngineDynamoDBBase):
+class MCPCore(SilvaEngineDynamoDBBase):
     def __init__(self, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
         SilvaEngineDynamoDBBase.__init__(self, logger, **setting)
 
