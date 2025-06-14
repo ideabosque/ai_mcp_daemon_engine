@@ -35,7 +35,7 @@ server = Server("MCP SSE Server")
 
 # === Tool Definitions ===
 @server.list_tools()
-async def list_tools(endpoint_id: str) -> List[Tool]:
+async def list_tools(endpoint_id: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
     tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
     return [Tool(**tool) for tool in tools]
@@ -43,7 +43,7 @@ async def list_tools(endpoint_id: str) -> List[Tool]:
 
 @server.call_tool()
 async def call_tool(
-    endpoint_id: str, name: str, arguments: Optional[Dict[str, Any]]
+    name: str, arguments: Optional[Dict[str, Any]], endpoint_id: str = "default"
 ) -> List[Union[TextContent, ImageContent, EmbeddedResource]]:
     """Call a specific tool with given arguments"""
     tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
@@ -54,7 +54,7 @@ async def call_tool(
 
 
 @server.list_resources()
-async def list_resources(endpoint_id: str) -> List[Resource]:
+async def list_resources(endpoint_id: str = "default") -> List[Resource]:
     """List available resources for the given endpoint"""
     resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
 
@@ -62,7 +62,7 @@ async def list_resources(endpoint_id: str) -> List[Resource]:
 
 
 @server.read_resource()
-async def read_resource(endpoint_id: str, uri: str) -> str:
+async def read_resource(uri: str, endpoint_id: str = "default") -> str:
     """Read content of a specific resource"""
     resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
     if not any(resource["uri"] == uri for resource in resources):
@@ -72,7 +72,7 @@ async def read_resource(endpoint_id: str, uri: str) -> str:
 
 
 @server.list_prompts()
-async def list_prompts(endpoint_id: str) -> List[Prompt]:
+async def list_prompts(endpoint_id: str = "default") -> List[Prompt]:
     """List available prompts for the given endpoint"""
     prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
 
@@ -88,7 +88,7 @@ async def list_prompts(endpoint_id: str) -> List[Prompt]:
 
 @server.get_prompt()
 async def get_prompt(
-    endpoint_id: str, name: str, arguments: Optional[Dict[str, Any]]
+    name: str, arguments: Optional[Dict[str, Any]], endpoint_id: str = "default"
 ) -> GetPromptResult:
     """Get a specific prompt with given arguments"""
     prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
@@ -96,136 +96,6 @@ async def get_prompt(
         raise ValueError(f"Unknown prompt: {name}")
 
     return execute_prompt_function(endpoint_id, name, arguments)
-
-
-# === MCP Message Handling ===
-async def process_mcp_message(
-    endpoint_id: str, message: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Process incoming MCP messages"""
-    try:
-        method = message.get("method")
-        params = message.get("params", {})
-        msg_id = message.get("id")
-
-        if method == "initialize":
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {"listChanged": False},
-                        "resources": {"subscribe": False, "listChanged": False},
-                        "prompts": {"listChanged": False},
-                    },
-                    "serverInfo": {"name": "SSE Server", "version": "1.0.0"},
-                },
-            }
-
-        elif method == "tools/list":
-            tools = await list_tools(endpoint_id)
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"tools": jsonable_encoder(tools)},
-            }
-
-        elif method == "tools/call":
-            result = await call_tool(
-                endpoint_id, params["name"], params.get("arguments")
-            )
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"content": jsonable_encoder(result)},
-            }
-
-        elif method == "resources/list":
-            resources = await list_resources(endpoint_id)
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"resources": jsonable_encoder(resources)},
-            }
-
-        elif method == "resources/read":
-            content = await read_resource(endpoint_id, params["uri"])
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "contents": [
-                        {
-                            "uri": params["uri"],
-                            "mimeType": "text/plain",
-                            "text": content,
-                        }
-                    ]
-                },
-            }
-
-        # Handle MCP protocol messages
-        elif method == "prompts/list":
-            # Handle list prompts request
-            prompts = await list_prompts(endpoint_id)
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "prompts": [
-                        {
-                            "name": prompt.name,
-                            "description": prompt.description,
-                            "arguments": [
-                                {
-                                    "name": arg.name,
-                                    "description": arg.description,
-                                    "required": arg.required,
-                                }
-                                for arg in (prompt.arguments or [])
-                            ],
-                        }
-                        for prompt in prompts
-                    ]
-                },
-            }
-
-        elif method == "prompts/get":
-            # Handle get prompt request
-            result = await get_prompt(
-                endpoint_id, params["name"], params.get("arguments")
-            )
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "description": result.description,
-                    "messages": [
-                        {
-                            "role": msg.role,
-                            "content": {
-                                "type": msg.content.type,
-                                "text": msg.content.text,
-                            },
-                        }
-                        for msg in result.messages
-                    ],
-                },
-            }
-
-        return {
-            "jsonrpc": "2.0",
-            "id": msg_id,
-            "error": {"code": -32601, "message": f"Method not found: {method}"},
-        }
-
-    except Exception as e:
-        return {
-            "jsonrpc": "2.0",
-            "id": message.get("id"),
-            "error": {"code": -32603, "message": "Internal error", "data": str(e)},
-        }
 
 
 async def run_stdio(logger: logging.Logger) -> None:

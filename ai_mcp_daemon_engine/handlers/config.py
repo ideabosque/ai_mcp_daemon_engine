@@ -18,7 +18,7 @@ from pydantic import AnyUrl
 from silvaengine_utility import Utility
 
 from ..models import utils
-from .mcp_core_engine import MCPCoreEngine
+from .mcp_core import MCPCore
 
 MCP_FUNCTION_LIST = """query mcpFunctionList(
     $pageNumber: Int, 
@@ -85,7 +85,7 @@ class Config:
     funct_zip_path = None
     funct_extract_path = None
     logger = None
-    mcp_core_engine = None
+    mcp_core = None
     aws_s3 = None
     aws_cognito_idp = None
 
@@ -125,8 +125,9 @@ class Config:
             cls.logger = logger
             cls._set_parameters(setting)
             cls._setup_function_paths(setting)
-            cls._USERS = cls._load()
-            cls._initialize_mcp_core_engine(logger, setting)
+            if cls.transport == "sse":
+                cls._USERS = cls._load()
+            cls._initialize_mcp_core(logger, setting)
             cls._initialize_aws_services(logger, setting)
             if setting.get("test_mode") == "local_for_all":
                 cls._initialize_tables(logger)
@@ -146,9 +147,9 @@ class Config:
         cls.user_clients = {}
         cls.transport = setting["transport"]
         cls.port = setting["port"]
-        if setting["mcp_configuration"] is not None:
-            cls.logger.info("MCP Configuration loaded successfully.")
+        if setting.get("mcp_configuration") is not None:
             cls.mcp_configuration["default"] = setting["mcp_configuration"]
+            cls.logger.info("MCP Configuration loaded successfully.")
 
         cls.auth_provider = setting.get("auth_provider", "local")  # "local" | "cognito"
         cls.jwt_secret_key = setting.get("jwt_secret_key", "CHANGEME")
@@ -181,11 +182,11 @@ class Config:
         os.makedirs(cls.funct_extract_path, exist_ok=True)
 
     @classmethod
-    def _initialize_mcp_core_engine(
+    def _initialize_mcp_core(
         cls, logger: logging.Logger, setting: Dict[str, Any]
     ) -> None:
         """
-        Initialize MCP Core Engine with AWS credentials.
+        Initialize MCP Core with AWS credentials.
         Args:
             logger (logging.Logger): Logger instance for logging
             setting (Dict[str, Any]): Configuration dictionary containing AWS credentials
@@ -194,7 +195,7 @@ class Config:
             setting.get(k)
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
-            cls.mcp_core_engine = MCPCoreEngine(logger, **setting)
+            cls.mcp_core = MCPCore(logger, **setting)
 
     @classmethod
     def _initialize_aws_services(
@@ -271,7 +272,7 @@ class Config:
         """
         # Check if schema exists in cache, if not fetch and store it
         if cls.mcp_configuration.get(endpoint_id) is None:
-            response = cls.mcp_core_engine.mcp_core_graphql(
+            response = cls.mcp_core.mcp_core_graphql(
                 **{
                     "endpoint_id": endpoint_id,
                     "query": MCP_FUNCTION_LIST,

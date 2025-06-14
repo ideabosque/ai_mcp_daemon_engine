@@ -69,7 +69,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             }
 
         elif method == "tools/list":
-            tools = await list_tools(endpoint_id)
+            tools = await list_tools(endpoint_id=endpoint_id)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -78,7 +78,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
 
         elif method == "tools/call":
             result = await call_tool(
-                endpoint_id, params["name"], params.get("arguments")
+                params["name"], params.get("arguments"), endpoint_id=endpoint_id
             )
             return {
                 "jsonrpc": "2.0",
@@ -87,7 +87,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             }
 
         elif method == "resources/list":
-            resources = await list_resources(endpoint_id)
+            resources = await list_resources(endpoint_id=endpoint_id)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -95,7 +95,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             }
 
         elif method == "resources/read":
-            content = await read_resource(endpoint_id, params["uri"])
+            content = await read_resource(params["uri"], endpoint_id=endpoint_id)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -113,7 +113,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
         # Handle MCP protocol messages
         elif method == "prompts/list":
             # Handle list prompts request
-            prompts = await list_prompts(endpoint_id)
+            prompts = await list_prompts(endpoint_id=endpoint_id)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -139,7 +139,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
         elif method == "prompts/get":
             # Handle get prompt request
             result = await get_prompt(
-                endpoint_id, params["name"], params.get("arguments")
+                params["name"], params.get("arguments"), endpoint_id=endpoint_id
             )
             return {
                 "jsonrpc": "2.0",
@@ -367,4 +367,4 @@ async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     params = await request.json()
     params.update({"endpoint_id": endpoint_id})
 
-    return Utility.json_loads(Config.mcp_core_engine.mcp_core_graphql(**params))
+    return Utility.json_loads(Config.mcp_core.mcp_core_graphql(**params))
