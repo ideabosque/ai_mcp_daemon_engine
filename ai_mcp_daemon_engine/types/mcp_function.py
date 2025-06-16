@@ -16,7 +16,6 @@ class MCPFunctionType(ObjectType):
     mcp_type = String()
     description = String()
     data = JSON()
-    annotations = String()
     module_name = String()
     function_name = String()
     setting = JSON()

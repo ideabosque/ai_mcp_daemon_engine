@@ -42,8 +42,7 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
             name 
             mcpType 
             description 
-            data 
-            annotations 
+            data  
             moduleName 
             functionName 
             setting 
@@ -125,7 +124,7 @@ class Config:
             cls.logger = logger
             cls._set_parameters(setting)
             cls._setup_function_paths(setting)
-            if cls.transport == "sse":
+            if cls.transport == "sse" and cls.auth_provider == "local":
                 cls._USERS = cls._load()
             cls._initialize_mcp_core(logger, setting)
             cls._initialize_aws_services(logger, setting)
@@ -145,8 +144,8 @@ class Config:
         """
         cls.sse_clients = {}
         cls.user_clients = {}
-        cls.transport = setting["transport"]
-        cls.port = setting["port"]
+        cls.transport = setting.get("transport", "sse")
+        cls.port = setting.get("port", 8000)
         if setting.get("mcp_configuration") is not None:
             cls.mcp_configuration["default"] = setting["mcp_configuration"]
             cls.logger.info("MCP Configuration loaded successfully.")
@@ -296,7 +295,6 @@ class Config:
                             {
                                 "name": tool["name"],
                                 "description": tool.get("description"),
-                                "annotations": tool.get("annotations"),
                             },
                             **tool.get("data", {}),
                         )
@@ -324,7 +322,6 @@ class Config:
                             {
                                 "name": resource["name"],
                                 "description": resource.get("description"),
-                                "annotations": resource.get("annotations"),
                             },
                             **resource.get("data", {}),
                         )
@@ -347,7 +344,6 @@ class Config:
                             {
                                 "name": prompt["name"],
                                 "description": prompt.get("description"),
-                                "annotations": prompt.get("annotations"),
                             },
                             **prompt.get("data", {}),
                         )
