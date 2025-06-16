@@ -11,6 +11,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
+from silvaengine_utility import Utility
+
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
 
@@ -105,7 +107,7 @@ class AIMCPDaemonEngine(object):
 
         from .handlers.mcp_server import process_mcp_message
 
-        return asyncio.run(process_mcp_message(endpoint_id, params))
+        return Utility.json_dumps(asyncio.run(process_mcp_message(endpoint_id, params)))
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         return Config.mcp_core.mcp_core_graphql(**params)
