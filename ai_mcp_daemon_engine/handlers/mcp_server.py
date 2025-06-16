@@ -8,7 +8,6 @@ import logging
 import sys
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi.encoders import jsonable_encoder
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
@@ -145,7 +144,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": jsonable_encoder(result)},
+                "result": {"content": result},
             }
 
         elif method == "resources/list":

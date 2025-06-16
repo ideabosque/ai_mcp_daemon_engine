@@ -189,7 +189,7 @@ async def post_mcp_message(
                 "timestamp": datetime.now().isoformat(),
             },
         )
-        return response
+        return jsonable_encoder(response)
     except Exception as e:
         return {
             "jsonrpc": "2.0",
