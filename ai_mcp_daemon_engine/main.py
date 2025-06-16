@@ -91,7 +91,7 @@ class AIMCPDaemonEngine(object):
         Config.initialize(logger, **setting)
 
         self.transport = setting["transport"]
-        self.port = setting["port"]
+        self.port = int(setting["port"])
         self.logger = logger
         self.setting = setting
 
