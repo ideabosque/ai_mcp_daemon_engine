@@ -72,7 +72,7 @@ def deploy() -> List:
                 "mcp": {
                     "is_static": False,
                     "label": "MCP Server",
-                    "type": "Event",
+                    "type": "RequestResponse",
                     "support_methods": ["POST", "GET"],
                     "is_auth_required": False,
                     "is_graphql": False,
