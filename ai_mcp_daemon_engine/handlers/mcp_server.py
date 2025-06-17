@@ -154,13 +154,13 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
                 "id": msg_id,
                 "result": {
                     "resources": [
-                        {
-                            "uri": resource.uri,
-                            "name": resource.name,
-                            "description": resource.description,
-                            "mimeType": resource.mimeType,
-                        }
-                        for resource in resources
+                        # {
+                        #     "uri": resource.uri,
+                        #     "name": resource.name,
+                        #     "description": resource.description,
+                        #     "mimeType": resource.mimeType,
+                        # }
+                        # for resource in resources
                     ]
                 },
             }
