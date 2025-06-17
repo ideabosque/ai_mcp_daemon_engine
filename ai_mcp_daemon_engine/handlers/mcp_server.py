@@ -149,18 +149,19 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
 
         elif method == "resources/list":
             resources = await list_resources(endpoint_id=endpoint_id)
+            Config.logger.info(f"Resources: {resources}")
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {
                     "resources": [
-                        # {
-                        #     "uri": resource.uri,
-                        #     "name": resource.name,
-                        #     "description": resource.description,
-                        #     "mimeType": resource.mimeType,
-                        # }
-                        # for resource in resources
+                        {
+                            "uri": resource.uri,
+                            "name": resource.name,
+                            "description": "",  # resource.description,
+                            "mimeType": "",  # resource.mimeType,
+                        }
+                        for resource in resources
                     ]
                 },
             }
