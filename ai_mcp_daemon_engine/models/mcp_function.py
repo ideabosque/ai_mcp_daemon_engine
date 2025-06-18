@@ -56,6 +56,7 @@ class MCPFunctionModel(BaseModel):
     mcp_type = UnicodeAttribute()
     description = UnicodeAttribute(null=True)
     data = MapAttribute()
+    annotations = UnicodeAttribute(null=True)
     module_name = UnicodeAttribute(null=True)
     function_name = UnicodeAttribute(null=True)
     setting = MapAttribute()
@@ -174,6 +175,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         }
         for key in [
             "description",
+            "annotations",
             "module_name",
             "function_name",
             "return_type",
@@ -199,6 +201,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         "mcp_type": MCPFunctionModel.mcp_type,
         "description": MCPFunctionModel.description,
         "data": MCPFunctionModel.data,
+        "annotations": MCPFunctionModel.annotations,
         "module_name": MCPFunctionModel.module_name,
         "function_name": MCPFunctionModel.function_name,
         "setting": MCPFunctionModel.setting,

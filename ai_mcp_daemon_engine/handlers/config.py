@@ -42,7 +42,8 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
             name 
             mcpType 
             description 
-            data  
+            data
+            annotations   
             moduleName 
             functionName 
             setting 
@@ -295,6 +296,7 @@ class Config:
                             {
                                 "name": tool["name"],
                                 "description": tool.get("description"),
+                                "annotations": tool.get("annotations"),
                             },
                             **tool.get("data", {}),
                         )
@@ -322,6 +324,7 @@ class Config:
                             {
                                 "name": resource["name"],
                                 "description": resource.get("description"),
+                                "annotations": resource.get("annotations"),
                             },
                             **resource.get("data", {}),
                         )
@@ -344,6 +347,7 @@ class Config:
                             {
                                 "name": prompt["name"],
                                 "description": prompt.get("description"),
+                                "annotations": prompt.get("annotations"),
                             },
                             **prompt.get("data", {}),
                         )
