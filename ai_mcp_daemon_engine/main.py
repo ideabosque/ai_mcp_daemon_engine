@@ -11,13 +11,10 @@ import os
 import sys
 from typing import Any, Dict, List
 
-import uvicorn
+from silvaengine_utility import Utility
 
-from .handlers.auth_router import router as auth_router
 from .handlers.config import Config
-from .handlers.mcp_app import app, process_mcp_message
 from .handlers.mcp_server import run_stdio
-from .handlers.middleware import FlexJWTMiddleware
 
 
 # Hook function applied to deployment
@@ -77,7 +74,7 @@ def deploy() -> List:
                 "mcp": {
                     "is_static": False,
                     "label": "MCP Server",
-                    "type": "Event",
+                    "type": "RequestResponse",
                     "support_methods": ["POST", "GET"],
                     "is_auth_required": False,
                     "is_graphql": False,
@@ -95,14 +92,10 @@ class AIMCPDaemonEngine(object):
         # Initialize configuration via the Config class
         Config.initialize(logger, **setting)
 
-        # JWT guard second
-        app.add_middleware(FlexJWTMiddleware, public_paths=["/health"])
-        # mount /auth routes
-        app.include_router(auth_router)
-
         self.transport = setting["transport"]
-        self.port = setting["port"]
+        self.port = int(setting["port"])
         self.logger = logger
+        self.setting = setting
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         endpoint_id = params.pop("endpoint_id", None)
@@ -112,7 +105,9 @@ class AIMCPDaemonEngine(object):
             endpoint_id = self.setting.get("endpoint_id")
         ##<--Testing Data-->##
 
-        return asyncio.run(process_mcp_message(endpoint_id, params))
+        from .handlers.mcp_server import process_mcp_message
+
+        return Utility.json_dumps(asyncio.run(process_mcp_message(endpoint_id, params)))
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         return Config.mcp_core.mcp_core_graphql(**params)
@@ -120,6 +115,18 @@ class AIMCPDaemonEngine(object):
     def daemon(self):
         try:
             if self.transport == "sse":
+
+                import uvicorn
+
+                from .handlers.auth_router import router as auth_router
+                from .handlers.mcp_app import app
+                from .handlers.middleware import FlexJWTMiddleware
+
+                # JWT guard second
+                app.add_middleware(FlexJWTMiddleware, public_paths=["/health"])
+                # mount /auth routes
+                app.include_router(auth_router)
+
                 self.logger.info("Running in SSE mode...")
                 """Run SSE server using uvicorn."""
                 config = uvicorn.Config(
