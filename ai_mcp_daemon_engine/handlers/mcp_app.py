@@ -171,8 +171,8 @@ async def get_sse_stream(
     )
 
 
-@app.post("/{endpoint_id}/mcp")
-async def post_mcp_message(
+@app.post("/{endpoint_id}/sse")
+async def post_sse_message(
     endpoint_id: str, request: Request, user: Dict = Depends(current_user)
 ) -> Dict:
     """Handle MCP protocol messages"""
@@ -189,6 +189,23 @@ async def post_mcp_message(
                 "timestamp": datetime.now().isoformat(),
             },
         )
+        return jsonable_encoder(response)
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32603, "message": "Internal error", "data": str(e)},
+        }
+
+
+@app.post("/{endpoint_id}/mcp")
+async def post_mcp_message(
+    endpoint_id: str, request: Request, user: Dict = Depends(current_user)
+) -> Dict:
+    """Handle MCP protocol messages"""
+    try:
+        message = await request.json()
+        response = await process_mcp_message(endpoint_id, message)
         return jsonable_encoder(response)
     except Exception as e:
         return {
