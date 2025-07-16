@@ -283,6 +283,10 @@ def execute_tool_function(
             tool_module["function_name"],
             source=tool_module.get("source"),
         )
+
+        if "endpoint_id" not in arguments:
+            arguments["endpoint_id"] = endpoint_id
+
         result = tool_function(Config.logger, tool_module["setting"], **arguments)
         if tool_module["return_type"] == "text":
             # Handle dict result by converting to JSON representation
