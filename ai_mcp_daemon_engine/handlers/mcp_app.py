@@ -322,6 +322,106 @@ async def get_metrics() -> Dict[str, Any]:
                 len(reqs) for reqs in request_counts.values()
             ),
         },
+        "mcp_cache": {
+            "cached_endpoints": list(Config.mcp_configuration.keys()),
+            "cache_size": len(Config.mcp_configuration),
+        },
+    }
+
+
+# === Admin Cache Management Endpoints ===
+@app.post("/{endpoint_id}/admin/cache/refresh")
+async def refresh_mcp_cache(
+    endpoint_id: str, user: Dict = Depends(current_user)
+) -> Dict[str, Any]:
+    """Refresh MCP configuration cache for a specific endpoint"""
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
+
+    try:
+        # Force refresh the configuration
+        config = Config.refresh_mcp_configuration(endpoint_id)
+
+        return {
+            "status": "success",
+            "message": f"Cache refreshed for endpoint: {endpoint_id}",
+            "timestamp": datetime.now().isoformat(),
+            "cache_stats": {
+                "endpoint_id": endpoint_id,
+                "tools_count": len(config.get("tools", [])),
+                "resources_count": len(config.get("resources", [])),
+                "prompts_count": len(config.get("prompts", [])),
+                "modules_count": len(config.get("modules", [])),
+            },
+        }
+    except Exception as e:
+        if Config.logger:
+            Config.logger.error(f"Failed to refresh cache for {endpoint_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to refresh cache: {str(e)}"
+        )
+
+
+@app.delete("/{endpoint_id}/admin/cache")
+async def clear_endpoint_cache(
+    endpoint_id: str, user: Dict = Depends(current_user)
+) -> Dict[str, Any]:
+    """Clear MCP configuration cache for a specific endpoint"""
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
+
+    Config.clear_mcp_configuration_cache(endpoint_id)
+
+    return {
+        "status": "success",
+        "message": f"Cache cleared for endpoint: {endpoint_id}",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@app.delete("/admin/cache")
+async def clear_all_cache(user: Dict = Depends(current_user)) -> Dict[str, Any]:
+    """Clear MCP configuration cache for all endpoints"""
+    cached_endpoints = list(Config.mcp_configuration.keys())
+    Config.clear_mcp_configuration_cache()
+
+    return {
+        "status": "success",
+        "message": "All MCP configuration cache cleared",
+        "timestamp": datetime.now().isoformat(),
+        "cleared_endpoints": cached_endpoints,
+    }
+
+
+@app.get("/{endpoint_id}/admin/cache/status")
+async def get_cache_status(
+    endpoint_id: str, user: Dict = Depends(current_user)
+) -> Dict[str, Any]:
+    """Get cache status for a specific endpoint"""
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
+
+    is_cached = endpoint_id in Config.mcp_configuration
+    config = Config.mcp_configuration.get(endpoint_id, {})
+
+    return {
+        "endpoint_id": endpoint_id,
+        "is_cached": is_cached,
+        "timestamp": datetime.now().isoformat(),
+        "cache_info": (
+            {
+                "tools_count": len(config.get("tools", [])),
+                "resources_count": len(config.get("resources", [])),
+                "prompts_count": len(config.get("prompts", [])),
+                "modules_count": len(config.get("modules", [])),
+                "module_links_count": len(config.get("module_links", [])),
+            }
+            if is_cached
+            else None
+        ),
     }
 
 
@@ -356,8 +456,37 @@ async def root(endpoint_id: str) -> Dict[str, Any]:
 # === GraphQL Endpoint ===
 @app.post("/{endpoint_id}/mcp_core_graphql")
 async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
-    """Handle GraphQL queries"""
+    """Handle GraphQL queries with automatic cache invalidation"""
     params = await request.json()
     params.update({"endpoint_id": endpoint_id})
 
-    return Utility.json_loads(Config.mcp_core.mcp_core_graphql(**params))
+    # Check if this is a mutation that modifies MCP configuration
+    query = params.get("query", "")
+    is_config_mutation = any(
+        mutation_name in query
+        for mutation_name in [
+            "insertUpdateMcpFunction",
+            "deleteMcpFunction",
+            "insertUpdateMcpModule",
+            "deleteMcpModule",
+            "insertUpdateMcpSetting",
+            "deleteMcpSetting",
+        ]
+    )
+
+    # Execute the GraphQL query
+    result = Utility.json_loads(Config.mcp_core.mcp_core_graphql(**params))
+
+    # If it was a successful configuration mutation, clear the cache
+    if is_config_mutation and "errors" not in result:
+        try:
+            Config.clear_mcp_configuration_cache(endpoint_id)
+            if Config.logger:
+                Config.logger.info(
+                    f"Cleared MCP configuration cache for {endpoint_id} after mutation"
+                )
+        except Exception as e:
+            if Config.logger:
+                Config.logger.warning(f"Failed to clear cache after mutation: {e}")
+
+    return result

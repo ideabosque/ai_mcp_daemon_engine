@@ -57,6 +57,7 @@ class Query(ObjectType):
         mcp_type=String(required=False),
         description=String(required=False),
         module_name=String(required=False),
+        class_name=String(required=False),
         function_name=String(required=False),
     )
 

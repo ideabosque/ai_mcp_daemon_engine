@@ -188,6 +188,44 @@ def execute_decorator():
     return actual_decorator
 
 
+def get_mcp_configuration_with_retry(
+    endpoint_id: str, max_retries: int = 1
+) -> Dict[str, Any]:
+    """
+    Get MCP configuration with automatic retry on failure.
+
+    Args:
+        endpoint_id: Endpoint ID to fetch configuration for
+        max_retries: Maximum number of retry attempts with cache refresh
+
+    Returns:
+        MCP configuration dictionary
+
+    Raises:
+        Exception: If configuration cannot be retrieved after retries
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            force_refresh = attempt > 0  # Force refresh on retry attempts
+            return Config.fetch_mcp_configuration(
+                endpoint_id, force_refresh=force_refresh
+            )
+        except Exception as e:
+            if attempt < max_retries:
+                Config.logger.warning(
+                    f"Failed to fetch MCP config for {endpoint_id} (attempt {attempt + 1}), "
+                    f"retrying with cache refresh: {e}"
+                )
+                # Clear cache before retry
+                Config.clear_mcp_configuration_cache(endpoint_id)
+                continue
+            else:
+                Config.logger.error(
+                    f"Failed to fetch MCP config for {endpoint_id} after {max_retries + 1} attempts: {e}"
+                )
+                raise
+
+
 def module_exists(module_name: str) -> bool:
     """Check if the module exists in the specified path."""
     module_dir = os.path.join(Config.funct_extract_path, module_name)
@@ -252,12 +290,9 @@ def execute_tool_function(
     arguments: Dict[str, Any],
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
     try:
+        config = get_mcp_configuration_with_retry(endpoint_id)
         tool = next(
-            (
-                tool
-                for tool in Config.fetch_mcp_configuration(endpoint_id)["tools"]
-                if tool["name"] == name
-            ),
+            (tool for tool in config["tools"] if tool["name"] == name),
             {},
         )
 
@@ -270,9 +305,7 @@ def execute_tool_function(
         module_link = next(
             (
                 module_link
-                for module_link in Config.fetch_mcp_configuration(endpoint_id)[
-                    "module_links"
-                ]
+                for module_link in config["module_links"]
                 if module_link["name"] == name and module_link["type"] == "tool"
             ),
             {},
@@ -281,7 +314,7 @@ def execute_tool_function(
         module = next(
             (
                 module
-                for module in Config.fetch_mcp_configuration(endpoint_id)["modules"]
+                for module in config["modules"]
                 if (
                     module["module_name"] == module_link["module_name"]
                     and module["class_name"] == module_link["class_name"]
@@ -329,21 +362,16 @@ def execute_resource_function(
     uri: str,
 ) -> str:
     try:
+        config = get_mcp_configuration_with_retry(endpoint_id)
         resource = next(
-            (
-                resource
-                for resource in Config.fetch_mcp_configuration(endpoint_id)["resources"]
-                if resource["uri"] == uri
-            ),
+            (resource for resource in config["resources"] if resource["uri"] == uri),
             {},
         )
 
         module_link = next(
             (
                 module_link
-                for module_link in Config.fetch_mcp_configuration(endpoint_id)[
-                    "module_links"
-                ]
+                for module_link in config["module_links"]
                 if module_link["name"] == resource["name"]
                 and module_link["type"] == "resource"
             ),
@@ -353,7 +381,7 @@ def execute_resource_function(
         module = next(
             (
                 module
-                for module in Config.fetch_mcp_configuration(endpoint_id)["modules"]
+                for module in config["modules"]
                 if (
                     module["module_name"] == module_link["module_name"]
                     and module["class_name"] == module_link["class_name"]
@@ -393,12 +421,9 @@ def execute_prompt_function(
     arguments: Dict[str, Any],
 ) -> GetPromptResult:
     try:
+        config = get_mcp_configuration_with_retry(endpoint_id)
         prompt = next(
-            (
-                prompt
-                for prompt in Config.fetch_mcp_configuration(endpoint_id)["prompts"]
-                if prompt["name"] == name
-            ),
+            (prompt for prompt in config["prompts"] if prompt["name"] == name),
             {},
         )
 
@@ -411,9 +436,7 @@ def execute_prompt_function(
         module_link = next(
             (
                 module_link
-                for module_link in Config.fetch_mcp_configuration(endpoint_id)[
-                    "module_links"
-                ]
+                for module_link in config["module_links"]
                 if module_link["name"] == name and module_link["type"] == "prompt"
             ),
             {},
@@ -422,7 +445,7 @@ def execute_prompt_function(
         module = next(
             (
                 module
-                for module in Config.fetch_mcp_configuration(endpoint_id)["modules"]
+                for module in config["modules"]
                 if (
                     module["module_name"] == module_link["module_name"]
                     and module["class_name"] == module_link["class_name"]
