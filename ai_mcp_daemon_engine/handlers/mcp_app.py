@@ -6,9 +6,9 @@ __author__ = "bibow"
 
 import asyncio
 import json
-from collections import deque
+import time
+from collections import defaultdict
 from datetime import datetime
-from itertools import count
 from typing import Any, AsyncGenerator, Dict
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -20,90 +20,101 @@ from silvaengine_utility import Utility
 
 from .config import Config
 from .mcp_server import list_prompts, list_resources, list_tools, process_mcp_message
+from .sse_manager import sse_manager
 
-# === SSE State ===
-client_id_seq = count(1)  # atomic client‑id generator
-message_id_seq = count(1)  # atomic message‑id generator
-message_history: deque[dict] = deque(maxlen=1000)  # replay buffer
+# === Rate Limiting ===
+request_counts = defaultdict(list)
 
 # === FastAPI and MCP Initialization ===
 app = FastAPI(title="MCP SSE Server")
 
+# Add CORS with more restrictive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # TODO: Replace with specific allowed origins in production
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+def rate_limit_check(client_ip: str, max_requests: int = 100, window_seconds: int = 60):
+    """Check if client has exceeded rate limit"""
+    now = time.time()
+    # Clean old requests
+    request_counts[client_ip] = [
+        req_time
+        for req_time in request_counts[client_ip]
+        if now - req_time < window_seconds
+    ]
+
+    if len(request_counts[client_ip]) >= max_requests:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    request_counts[client_ip].append(now)
 
 
 # === SSE Event Generator ===
 async def sse_event_generator(
     request: Request, client_id: int, username: str, queue: asyncio.Queue
 ) -> AsyncGenerator[str, None]:
-    """Generate SSE events for connected clients"""
-    yield f"event: connected\ndata: {json.dumps({'client_id': client_id, 'timestamp': datetime.now().isoformat()})}\n\n"
+    """Generate SSE events for connected clients with better error handling"""
     try:
+        # Send connection event
+        yield f"event: connected\ndata: {json.dumps({
+            'client_id': client_id, 
+            'timestamp': datetime.now().isoformat()
+        })}\n\n"
+
         while not await request.is_disconnected():
             try:
                 message = await asyncio.wait_for(queue.get(), timeout=15)
-                yield f"data: {json.dumps(jsonable_encoder(message))}\n\n"
+                data = json.dumps(jsonable_encoder(message))
+                yield f"data: {data}\n\n"
             except asyncio.TimeoutError:
-                yield f"event: heartbeat\ndata: {json.dumps({'client_id': client_id, 'timestamp': datetime.now().isoformat()})}\n\n"
+                # Send heartbeat
+                heartbeat = json.dumps(
+                    {
+                        "client_id": client_id,
+                        "timestamp": datetime.now().isoformat(),
+                        "type": "heartbeat",
+                    }
+                )
+                yield f"event: heartbeat\ndata: {heartbeat}\n\n"
+            except Exception as e:
+                if Config.logger:
+                    Config.logger.error(
+                        f"Error in SSE generator for client {client_id}: {e}"
+                    )
+                break
+
+    except asyncio.CancelledError:
+        if Config.logger:
+            Config.logger.info(f"SSE generator cancelled for client {client_id}")
+    except Exception as e:
+        if Config.logger:
+            Config.logger.error(
+                f"Fatal error in SSE generator for client {client_id}: {e}"
+            )
     finally:
-        Config.sse_clients.pop(client_id, None)
-        cids = Config.user_clients.get(username, set())
-        cids.discard(client_id)
-        if not cids:
-            Config.user_clients.pop(username, None)
+        # Cleanup
+        await sse_manager.remove_client(client_id, username)
 
 
 # === Broadcast Logic ===
-async def broadcast_to_clients(message: Dict) -> None:
-    """Send an event to all connected clients and record it for replay"""
-    message_id = next(message_id_seq)
-    message_with_id = dict(message, id=message_id)
-    message_history.append(message_with_id)
-
-    dead_clients = []
-    for client_id, queue in list(Config.sse_clients.items()):
-        try:
-            await queue.put(message_with_id)
-        except asyncio.QueueFull:
-            dead_clients.append(client_id)
-    for cid in dead_clients:
-        Config.sse_clients.pop(cid, None)
+async def broadcast_to_clients(message: Dict) -> int:
+    """Send an event to all connected clients and return success count"""
+    return await sse_manager.broadcast_message(message)
 
 
 async def send_to_client(cid: int, message: Dict[str, Any]) -> bool:
-    """Unicast a message to one client, with id-stamping & replay tracking"""
-    message_id = next(message_id_seq)
-    message_with_id = dict(message, id=message_id)
-    message_history.append(message_with_id)
-
-    q = Config.sse_clients.get(cid)
-    if not q:
-        return False
-    try:
-        q.put_nowait(message_with_id)
-        return True
-    except asyncio.QueueFull:
-        Config.sse_clients.pop(cid, None)
-        Config.logger.warning("Queue full – evict client %s", cid)
-        return False
+    """Unicast a message to one client"""
+    return await sse_manager.send_to_client(cid, message)
 
 
 async def send_to_user(username: str, message: dict[str, Any]) -> bool:
-    """Send a message to *all* live connections for a user."""
-    cids = Config.user_clients.get(username)
-    if not cids:
-        return False
-    delivered = False
-    for cid in set(cids):  # copy to avoid set-size change
-        ok = await send_to_client(cid, message)
-        delivered = delivered or ok
-    return delivered
+    """Send a message to all live connections for a user."""
+    return await sse_manager.send_to_user(username, message)
 
 
 def current_user(request: Request) -> Dict:
@@ -128,21 +139,37 @@ async def get_sse_stream(
     user: Dict = Depends(current_user),
     origin: str = Header(None),
 ) -> StreamingResponse:
-    """Handle SSE stream connections"""
-    # Validate Origin header to prevent DNS rebinding attacks
-    # if origin != "http://your-allowed-origin.com":  # Replace with your allowed origin
-    #     raise HTTPException(status_code=403, detail="Forbidden")
+    """Handle SSE stream connections with improved security and error handling"""
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
 
-    client_id = next(client_id_seq)
-    queue = asyncio.Queue(maxsize=100)
+    # TODO: Uncomment and configure for production
+    # allowed_origins = ["https://your-allowed-domain.com"]
+    # if origin and origin not in allowed_origins:
+    #     raise HTTPException(status_code=403, detail="Forbidden origin")
+
+    # Rate limiting
+    client_ip = request.client.host
+    rate_limit_check(client_ip, max_requests=50, window_seconds=60)
+
+    # Create new client with SSE manager
+    client_id, queue = await sse_manager.add_client(user["username"])
+
+    # Handle message replay
     last_event_id = request.headers.get("last-event-id")
-    if last_event_id and last_event_id.isdigit():
-        missed = [m for m in message_history if m["id"] > int(last_event_id)]
-        for m in missed:
-            await queue.put(m)
-    Config.sse_clients[client_id] = queue
-    Config.user_clients.setdefault(user["username"], set()).add(client_id)
+    missed_messages = await sse_manager.get_missed_messages(last_event_id)
+    for msg in missed_messages:
+        try:
+            await queue.put(msg)
+        except asyncio.QueueFull:
+            if Config.logger:
+                Config.logger.warning(
+                    f"Queue full during replay for client {client_id}"
+                )
+            break
 
+    # Send initialization metadata
     metadata = {
         "type": "mcp_activity",
         "method": "initialize",
@@ -158,11 +185,16 @@ async def get_sse_stream(
             }
         },
     }
-    await queue.put(metadata)
+    try:
+        await queue.put(metadata)
+    except asyncio.QueueFull:
+        await sse_manager.remove_client(client_id, user["username"])
+        raise HTTPException(status_code=503, detail="Server too busy")
 
     headers = {
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",  # Disable nginx buffering
     }
     return StreamingResponse(
         sse_event_generator(request, client_id, user["username"], queue),
@@ -175,11 +207,27 @@ async def get_sse_stream(
 async def post_sse_message(
     endpoint_id: str, request: Request, user: Dict = Depends(current_user)
 ) -> Dict:
-    """Handle MCP protocol messages"""
+    """Handle MCP protocol messages with improved validation and error handling"""
+    # Rate limiting
+    client_ip = request.client.host
+    rate_limit_check(client_ip)
+
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
+
+    message = None
     try:
         message = await request.json()
+
+        # Validate message structure
+        if not isinstance(message, dict) or "method" not in message:
+            raise HTTPException(status_code=400, detail="Invalid message format")
+
         response = await process_mcp_message(endpoint_id, message)
-        await send_to_user(
+
+        # Send to user clients
+        delivered = await send_to_user(
             user["username"],
             {
                 "type": "mcp_activity",
@@ -189,11 +237,24 @@ async def post_sse_message(
                 "timestamp": datetime.now().isoformat(),
             },
         )
+
+        if not delivered and Config.logger:
+            Config.logger.warning(
+                f"Failed to deliver message to user {user['username']}"
+            )
+
         return jsonable_encoder(response)
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    except HTTPException:
+        raise
     except Exception as e:
+        if Config.logger:
+            Config.logger.error(f"Error processing SSE message: {e}")
         return {
             "jsonrpc": "2.0",
-            "id": None,
+            "id": getattr(message, "id", None) if message else None,
             "error": {"code": -32603, "message": "Internal error", "data": str(e)},
         }
 
@@ -202,15 +263,36 @@ async def post_sse_message(
 async def post_mcp_message(
     endpoint_id: str, request: Request, user: Dict = Depends(current_user)
 ) -> Dict:
-    """Handle MCP protocol messages"""
+    """Handle MCP protocol messages with validation"""
+    # Rate limiting
+    client_ip = request.client.host
+    rate_limit_check(client_ip)
+
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
+
+    message = None
     try:
         message = await request.json()
+
+        # Validate message structure
+        if not isinstance(message, dict):
+            raise HTTPException(status_code=400, detail="Invalid message format")
+
         response = await process_mcp_message(endpoint_id, message)
         return jsonable_encoder(response)
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    except HTTPException:
+        raise
     except Exception as e:
+        if Config.logger:
+            Config.logger.error(f"Error processing MCP message: {e}")
         return {
             "jsonrpc": "2.0",
-            "id": None,
+            "id": getattr(message, "id", None) if message else None,
             "error": {"code": -32603, "message": "Internal error", "data": str(e)},
         }
 
@@ -219,27 +301,56 @@ async def post_mcp_message(
 @app.get("/health")
 async def health_check() -> Dict[str, Any]:
     """Check server health status"""
+    stats = await sse_manager.get_stats()
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "sse_clients": len(Config.sse_clients),
+        "sse_stats": stats,
+    }
+
+
+@app.get("/metrics")
+async def get_metrics() -> Dict[str, Any]:
+    """Get detailed server metrics"""
+    stats = await sse_manager.get_stats()
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "sse_manager": stats,
+        "rate_limiting": {
+            "active_ips": len(request_counts),
+            "total_tracked_requests": sum(
+                len(reqs) for reqs in request_counts.values()
+            ),
+        },
     }
 
 
 @app.get("/{endpoint_id}")
 async def root(endpoint_id: str) -> Dict[str, Any]:
     """Get endpoint info including tools, resources and prompts"""
-    tools = await list_tools(endpoint_id)
-    resources = await list_resources(endpoint_id)
-    prompts = await list_prompts(endpoint_id)
-    return {
-        "server": "MCP SSE Server",
-        "version": "1.0.0",
-        "connected_clients": len(Config.sse_clients),
-        "tools": jsonable_encoder(tools),
-        "resources": jsonable_encoder(resources),
-        "prompts": jsonable_encoder(prompts),
-    }
+    # Validate endpoint_id
+    if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid endpoint_id")
+
+    try:
+        tools = await list_tools(endpoint_id)
+        resources = await list_resources(endpoint_id)
+        prompts = await list_prompts(endpoint_id)
+        stats = await sse_manager.get_stats()
+
+        return {
+            "server": "MCP SSE Server",
+            "version": "1.0.0",
+            "endpoint_id": endpoint_id,
+            "sse_stats": stats,
+            "tools": jsonable_encoder(tools),
+            "resources": jsonable_encoder(resources),
+            "prompts": jsonable_encoder(prompts),
+        }
+    except Exception as e:
+        if Config.logger:
+            Config.logger.error(f"Error getting endpoint info for {endpoint_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # === GraphQL Endpoint ===

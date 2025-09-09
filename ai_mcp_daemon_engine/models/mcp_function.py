@@ -58,10 +58,9 @@ class MCPFunctionModel(BaseModel):
     data = MapAttribute()
     annotations = UnicodeAttribute(null=True)
     module_name = UnicodeAttribute(null=True)
+    class_name = UnicodeAttribute(null=True)
     function_name = UnicodeAttribute(null=True)
-    setting = MapAttribute()
     return_type = UnicodeAttribute(null=True)
-    source = UnicodeAttribute(null=True)
     updated_by = UnicodeAttribute()
     created_at = UTCDateTimeAttribute()
     updated_at = UTCDateTimeAttribute()
@@ -125,6 +124,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
     mcp_type = kwargs.get("mcp_type")
     description = kwargs.get("description")
     module_name = kwargs.get("module_name")
+    class_name = kwargs.get("class_name")
     function_name = kwargs.get("function_name")
 
     args = []
@@ -135,13 +135,15 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
         inquiry_funct = MCPFunctionModel.query
         if mcp_type:
             inquiry_funct = MCPFunctionModel.mcp_type_index.query
-            args[1] = MCPFunctionModel.mcp_type == type
+            args[1] = MCPFunctionModel.mcp_type == mcp_type
             count_funct = MCPFunctionModel.mcp_type_index.count
     the_filters = None
     if description:
         the_filters &= MCPFunctionModel.description.contains(description)
     if module_name:
         the_filters &= MCPFunctionModel.module_name == module_name
+    if class_name:
+        the_filters &= MCPFunctionModel.class_name == class_name
     if function_name:
         the_filters &= MCPFunctionModel.function_name == function_name
     if the_filters is not None:
@@ -168,7 +170,6 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         cols = {
             "mcp_type": kwargs["mcp_type"],
             "data": kwargs.get("data", {}),
-            "setting": kwargs.get("setting", {}),
             "updated_by": kwargs["updated_by"],
             "created_at": pendulum.now("UTC"),
             "updated_at": pendulum.now("UTC"),
@@ -177,9 +178,9 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
             "description",
             "annotations",
             "module_name",
+            "class_name",
             "function_name",
             "return_type",
-            "source",
         ]:
             if key in kwargs:
                 cols[key] = kwargs[key]
@@ -203,10 +204,9 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         "data": MCPFunctionModel.data,
         "annotations": MCPFunctionModel.annotations,
         "module_name": MCPFunctionModel.module_name,
+        "class_name": MCPFunctionModel.class_name,
         "function_name": MCPFunctionModel.function_name,
-        "setting": MCPFunctionModel.setting,
         "return_type": MCPFunctionModel.return_type,
-        "source": MCPFunctionModel.source,
     }
 
     for key, field in field_map.items():

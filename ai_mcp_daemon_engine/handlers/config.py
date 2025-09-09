@@ -24,14 +24,16 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
     $pageNumber: Int, 
     $limit: Int, 
     $mcpType: String, 
-    $moduleName: String, 
+    $moduleName: String,
+    $className: String, 
     $functionName: String
 ) {
     mcpFunctionList(
         pageNumber: $pageNumber, 
         limit: $limit, 
         mcpType: $mcpType, 
-        moduleName: $moduleName, 
+        moduleName: $moduleName,
+        className: $className, 
         functionName: $functionName
     ) {
         pageSize 
@@ -44,7 +46,8 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
             description 
             data
             annotations   
-            moduleName 
+            moduleName
+            className 
             functionName 
             setting 
             source 
@@ -55,6 +58,29 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
     }
 }"""
 
+MCP_MODULE = """query mcpModule($moduleName: String!) {
+    mcpModule(moduleName: $moduleName) {
+        endpointId 
+        moduleName 
+        packageName 
+        classes 
+        source 
+        updatedBy 
+        createdAt 
+        updatedAt
+    }
+}"""
+
+MCP_SETTING = """query mcpSetting($settingId: String!) {
+    mcpSetting(settingId: $settingId) {
+        endpointId 
+        settingId 
+        setting 
+        updatedBy 
+        createdAt 
+        updatedAt
+    }
+}"""
 
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -76,8 +102,8 @@ class Config:
     """
 
     # === SSE Client Registry ===
-    sse_clients: Dict[int, asyncio.Queue] = None
-    user_clients: dict[str, set[int]] = None
+    sse_clients: Dict[int, asyncio.Queue] = {}
+    user_clients: dict[str, set[int]] = {}
     transport = None
     port = None
     mcp_configuration = {}
@@ -290,81 +316,106 @@ class Config:
             )
 
             mcp_configuration = {
-                "tools": {
-                    "tools": [
-                        dict(
-                            {
-                                "name": tool["name"],
-                                "description": tool.get("description"),
-                                "annotations": tool.get("annotations"),
-                            },
-                            **tool.get("data", {}),
-                        )
-                        for tool in tools
-                    ],
-                    "tool_modules": [
+                "tools": [
+                    dict(
                         {
                             "name": tool["name"],
-                            "module_name": tool["moduleName"],
-                            "function_name": tool["functionName"],
-                            "setting": tool.get("setting"),
-                            "return_type": (
-                                "text"
-                                if tool.get("returnType") is None
-                                else tool.get("returnType")
-                            ),
-                            "source": tool.get("source"),
-                        }
-                        for tool in tools
-                    ],
-                },
-                "resources": {
-                    "resources": [
-                        dict(
-                            {
-                                "name": resource["name"],
-                                "description": resource.get("description"),
-                                "annotations": resource.get("annotations"),
-                            },
-                            **resource.get("data", {}),
-                        )
-                        for resource in resources
-                    ],
-                    "resource_modules": [
+                            "description": tool.get("description"),
+                            "annotations": tool.get("annotations"),
+                        },
+                        **tool.get("data", {}),
+                    )
+                    for tool in tools
+                ],
+                "resources": [
+                    dict(
                         {
                             "name": resource["name"],
-                            "module_name": resource["moduleName"],
-                            "function_name": resource["functionName"],
-                            "setting": resource.get("setting"),
-                            "source": resource.get("source"),
-                        }
-                        for resource in resources
-                    ],
-                },
-                "prompts": {
-                    "prompts": [
-                        dict(
-                            {
-                                "name": prompt["name"],
-                                "description": prompt.get("description"),
-                                "annotations": prompt.get("annotations"),
-                            },
-                            **prompt.get("data", {}),
-                        )
-                        for prompt in prompts
-                    ],
-                    "prompt_modules": [
+                            "description": resource.get("description"),
+                            "annotations": resource.get("annotations"),
+                        },
+                        **resource.get("data", {}),
+                    )
+                    for resource in resources
+                ],
+                "prompts": [
+                    dict(
                         {
                             "name": prompt["name"],
-                            "module_name": prompt["moduleName"],
-                            "function_name": prompt["functionName"],
-                            "setting": prompt.get("setting"),
-                            "source": prompt.get("source"),
-                        }
-                        for prompt in prompts
-                    ],
-                },
+                            "description": prompt.get("description"),
+                            "annotations": prompt.get("annotations"),
+                        },
+                        **prompt.get("data", {}),
+                    )
+                    for prompt in prompts
+                ],
+                "module_links": [
+                    {
+                        "type": mcp_function["type"],
+                        "name": mcp_function["name"],
+                        "module_name": mcp_function["moduleName"],
+                        "class_name": mcp_function["className"],
+                        "function_name": mcp_function["functionName"],
+                        "return_type": (
+                            "text"
+                            if mcp_function.get("returnType") is None
+                            else mcp_function.get("returnType")
+                        ),
+                    }
+                    for mcp_function in mcp_functions
+                ],
+                "modules": [],
             }
+
+            # Group classes by module to reduce GraphQL calls
+            modules_classes = {}
+            for mcp_link in mcp_configuration["module_links"]:
+                module_name = mcp_link["module_name"]
+                class_name = mcp_link["class_name"]
+                if module_name not in modules_classes:
+                    modules_classes[module_name] = set()
+                modules_classes[module_name].add(class_name)
+
+            for module_name, class_names in modules_classes.items():
+                response = cls.mcp_core.mcp_core_graphql(
+                    **{
+                        "endpoint_id": endpoint_id,
+                        "query": MCP_MODULE,
+                        "variables": {"moduleName": module_name},
+                    }
+                )
+
+                response = Utility.json_loads(response)
+                module = response["data"]["mcpModule"]
+
+                # Process all classes for this module
+                for class_name in class_names:
+                    matching_class = next(
+                        (c for c in module["classes"] if c["class_name"] == class_name),
+                        {},
+                    )
+                    assert (
+                        matching_class != {}
+                    ), f"Class '{class_name}' not found in module '{module_name}'."
+
+                    response = cls.mcp_core.mcp_core_graphql(
+                        **{
+                            "endpoint_id": endpoint_id,
+                            "query": MCP_SETTING,
+                            "variables": {"settingId": matching_class["setting_id"]},
+                        }
+                    )
+                    response = Utility.json_loads(response)
+                    _setting = response["data"]["mcpSetting"]
+                    mcp_configuration["modules"].append(
+                        {
+                            "module_name": module_name,
+                            "package_name": module["package_name"],
+                            "class_name": matching_class["class_name"],
+                            "setting": _setting["setting"],
+                            "source": module["source"],
+                        }
+                    )
 
             cls.mcp_configuration[endpoint_id] = mcp_configuration
 
