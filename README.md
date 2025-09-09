@@ -112,106 +112,108 @@ Supply a JSON blob that describes the endpoint’s capabilities and set its path
 
 ```json
 {
-    "tools": {
-        "tools": [
-            {
-                "name": "hello",
-                "description": "Greet someone",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "Name",
-                            "default": "World"
-                        }
+    "tools": [
+        {
+            "name": "hello",
+            "description": "Greet someone",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name",
+                        "default": "World"
                     }
-                },
-                "annotations": null
+                }
             },
-            {
-                "name": "add_numbers",
-                "description": "Add two numbers",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "a": {
-                            "type": "integer",
-                            "description": "First number"
-                        },
-                        "b": {
-                            "type": "integer",
-                            "description": "Second number"
-                        }
+            "annotations": null
+        },
+        {
+            "name": "add_numbers",
+            "description": "Add two numbers",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "a": {
+                        "type": "integer",
+                        "description": "First number"
                     },
-                    "required": [
-                        "a",
-                        "b"
-                    ]
-                },
-                "annotations": null
-            }
-        ],
-        "tool_modules": [
-            {
-                "name": "hello",
-                "module_name": "mcp_function_demo",
-                "function_name": "hello",
-                "setting": {},
-                "return_type": "text"
-            },
-            {
-                "name": "add_numbers",
-                "module_name": "mcp_function_demo",
-                "function_name": "add_numbers",
-                "setting": {},
-                "return_type": "text"
-            }
-        ]
-    },
-    "resources": {
-        "resources": [
-            {
-                "uri": "status://server",
-                "name": "Server Status",
-                "description": "Status info",
-                "mimeType": "text/plain",
-                "size": null,
-                "annotations": null
-            }
-        ],
-        "resource_modules": [
-            {
-                "name": "Server Status",
-                "module_name": "mcp_function_demo",
-                "function_name": "read_resource",
-                "setting": {}
-            }
-        ]
-    },
-    "prompts": {
-        "prompts": [
-            {
-                "name": "example-prompt",
-                "description": "An example prompt template",
-                "arguments": [
-                    {
-                        "name": "arg1",
-                        "description": "Example argument",
-                        "required": true
+                    "b": {
+                        "type": "integer",
+                        "description": "Second number"
                     }
+                },
+                "required": [
+                    "a",
+                    "b"
                 ]
-            }
-        ],
-        "prompt_modules": [
-            {
-                "name": "example-prompt",
-                "module_name": "mcp_function_demo",
-                "function_name": "get_prompt",
-                "setting": {}
-            }
-        ]
-    }
+            },
+            "annotations": null
+        }
+    ],
+    "resources": [
+        {
+            "uri": "status://server",
+            "name": "Server Status",
+            "description": "Status info",
+            "mimeType": "text/plain",
+            "size": null,
+            "annotations": null
+        }
+    ],
+    "prompts": [
+        {
+            "name": "example-prompt",
+            "description": "An example prompt template",
+            "arguments": [
+                {
+                    "name": "arg1",
+                    "description": "Example argument",
+                    "required": true
+                }
+            ]
+        }
+    ],
+    "module_links": [
+        {
+            "type": "tool",
+            "name": "hello",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "hello",
+            "return_type": "text"
+        },
+        {
+            "type": "tool",
+            "name": "add_numbers",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "add_numbers",
+            "return_type": "text"
+        },
+        {
+            "type": "resource",
+            "name": "Server Status",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "read_resource"
+        },
+        {
+            "type": "prompt",
+            "name": "example-prompt",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "get_prompt"
+        }
+    ],
+    "modules": [
+        {
+            "package_name": "mcp_function_demo",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "setting": {}
+        }
+    ]
 }
 ```
 
