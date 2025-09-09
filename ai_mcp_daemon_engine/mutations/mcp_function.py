@@ -24,10 +24,9 @@ class InsertUpdateMcpFunction(Mutation):
         data = JSON(required=False)
         annotations = String(required=False)
         module_name = String(required=False)
+        class_name = String(required=False)
         function_name = String(required=False)
-        setting = JSON(required=False)
         return_type = String(required=False)
-        source = String(required=False)
         updated_by = String(required=True)
 
     @staticmethod

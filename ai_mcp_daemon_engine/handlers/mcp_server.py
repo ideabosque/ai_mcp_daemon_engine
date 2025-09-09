@@ -36,7 +36,10 @@ server = Server("MCP SSE Server")
 @server.list_tools()
 async def list_tools(endpoint_id: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
-    tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
+    from .mcp_utility import get_mcp_configuration_with_retry
+
+    config = get_mcp_configuration_with_retry(endpoint_id)
+    tools = config["tools"]
     return [Tool(**tool) for tool in tools]
 
 
@@ -45,7 +48,10 @@ async def call_tool(
     name: str, arguments: Optional[Dict[str, Any]], endpoint_id: str = "default"
 ) -> List[Union[TextContent, ImageContent, EmbeddedResource]]:
     """Call a specific tool with given arguments"""
-    tools = Config.fetch_mcp_configuration(endpoint_id)["tools"]["tools"]
+    from .mcp_utility import get_mcp_configuration_with_retry
+
+    config = get_mcp_configuration_with_retry(endpoint_id)
+    tools = config["tools"]
     if not any(tool["name"] == name for tool in tools):
         raise ValueError(f"Unknown tool: {name}")
 
@@ -55,7 +61,10 @@ async def call_tool(
 @server.list_resources()
 async def list_resources(endpoint_id: str = "default") -> List[Resource]:
     """List available resources for the given endpoint"""
-    resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
+    from .mcp_utility import get_mcp_configuration_with_retry
+
+    config = get_mcp_configuration_with_retry(endpoint_id)
+    resources = config["resources"]
 
     return [Resource(**resource) for resource in resources]
 
@@ -63,7 +72,10 @@ async def list_resources(endpoint_id: str = "default") -> List[Resource]:
 @server.read_resource()
 async def read_resource(uri: str, endpoint_id: str = "default") -> str:
     """Read content of a specific resource"""
-    resources = Config.fetch_mcp_configuration(endpoint_id)["resources"]["resources"]
+    from .mcp_utility import get_mcp_configuration_with_retry
+
+    config = get_mcp_configuration_with_retry(endpoint_id)
+    resources = config["resources"]
     if not any(resource["uri"] == uri for resource in resources):
         raise ValueError(f"Unknown resource: {uri}")
 
@@ -73,7 +85,10 @@ async def read_resource(uri: str, endpoint_id: str = "default") -> str:
 @server.list_prompts()
 async def list_prompts(endpoint_id: str = "default") -> List[Prompt]:
     """List available prompts for the given endpoint"""
-    prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
+    from .mcp_utility import get_mcp_configuration_with_retry
+
+    config = get_mcp_configuration_with_retry(endpoint_id)
+    prompts = config["prompts"]
 
     return [
         Prompt(
@@ -90,7 +105,10 @@ async def get_prompt(
     name: str, arguments: Optional[Dict[str, Any]], endpoint_id: str = "default"
 ) -> GetPromptResult:
     """Get a specific prompt with given arguments"""
-    prompts = Config.fetch_mcp_configuration(endpoint_id)["prompts"]["prompts"]
+    from .mcp_utility import get_mcp_configuration_with_retry
+
+    config = get_mcp_configuration_with_retry(endpoint_id)
+    prompts = config["prompts"]
     if not any(prompt["name"] == name for prompt in prompts):
         raise ValueError(f"Unknown prompt: {name}")
 
@@ -141,10 +159,37 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             result = await call_tool(
                 params["name"], params.get("arguments"), endpoint_id=endpoint_id
             )
+            # Convert content objects to dictionaries for JSON serialization
+            serialized_content = []
+            for item in result:
+                if hasattr(item, "model_dump"):
+                    # Use Pydantic model serialization if available
+                    serialized_content.append(item.model_dump())
+                else:
+                    # Manual serialization for TextContent, ImageContent, etc.
+                    content_dict = {
+                        "type": item.type,
+                    }
+                    if hasattr(item, "text"):
+                        content_dict["text"] = item.text
+                    if hasattr(item, "data"):
+                        content_dict["data"] = item.data
+                    if hasattr(item, "mimeType"):
+                        content_dict["mimeType"] = item.mimeType
+                    if hasattr(item, "name"):
+                        content_dict["name"] = item.name
+                    if hasattr(item, "uri"):
+                        content_dict["uri"] = item.uri
+                    if hasattr(item, "resource"):
+                        content_dict["resource"] = item.resource
+                    # Add _meta field as empty object if not present
+                    content_dict["_meta"] = getattr(item, "_meta", {})
+                    serialized_content.append(content_dict)
+
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": result},
+                "result": {"content": serialized_content},
             }
 
         elif method == "resources/list":
@@ -183,6 +228,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
                             "uri": params["uri"],
                             "mimeType": "text/plain",
                             "text": content,
+                            "_meta": {},
                         }
                     ]
                 },
@@ -219,21 +265,32 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             result = await get_prompt(
                 params["name"], params.get("arguments"), endpoint_id=endpoint_id
             )
+            # Serialize messages with proper content serialization
+            serialized_messages = []
+            for msg in result.messages:
+                # Serialize the content object properly
+                if hasattr(msg.content, "model_dump"):
+                    content_dict = msg.content.model_dump()
+                else:
+                    content_dict = {
+                        "type": msg.content.type,
+                        "text": msg.content.text,
+                        "_meta": getattr(msg.content, "_meta", {}),
+                    }
+
+                serialized_messages.append(
+                    {
+                        "role": msg.role,
+                        "content": content_dict,
+                    }
+                )
+
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {
                     "description": result.description,
-                    "messages": [
-                        {
-                            "role": msg.role,
-                            "content": {
-                                "type": msg.content.type,
-                                "text": msg.content.text,
-                            },
-                        }
-                        for msg in result.messages
-                    ],
+                    "messages": serialized_messages,
                 },
             }
 

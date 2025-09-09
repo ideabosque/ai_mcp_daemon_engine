@@ -188,6 +188,44 @@ def execute_decorator():
     return actual_decorator
 
 
+def get_mcp_configuration_with_retry(
+    endpoint_id: str, max_retries: int = 1
+) -> Dict[str, Any]:
+    """
+    Get MCP configuration with automatic retry on failure.
+
+    Args:
+        endpoint_id: Endpoint ID to fetch configuration for
+        max_retries: Maximum number of retry attempts with cache refresh
+
+    Returns:
+        MCP configuration dictionary
+
+    Raises:
+        Exception: If configuration cannot be retrieved after retries
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            force_refresh = attempt > 0  # Force refresh on retry attempts
+            return Config.fetch_mcp_configuration(
+                endpoint_id, force_refresh=force_refresh
+            )
+        except Exception as e:
+            if attempt < max_retries:
+                Config.logger.warning(
+                    f"Failed to fetch MCP config for {endpoint_id} (attempt {attempt + 1}), "
+                    f"retrying with cache refresh: {e}"
+                )
+                # Clear cache before retry
+                Config.clear_mcp_configuration_cache(endpoint_id)
+                continue
+            else:
+                Config.logger.error(
+                    f"Failed to fetch MCP config for {endpoint_id} after {max_retries + 1} attempts: {e}"
+                )
+                raise
+
+
 def module_exists(module_name: str) -> bool:
     """Check if the module exists in the specified path."""
     module_dir = os.path.join(Config.funct_extract_path, module_name)
@@ -202,9 +240,9 @@ def module_exists(module_name: str) -> bool:
     return False
 
 
-def download_and_extract_module(module_name: str) -> None:
+def download_and_extract_package(package_name: str) -> None:
     """Download and extract the module from S3 if not already extracted."""
-    key = f"{module_name}.zip"
+    key = f"{package_name}.zip"
     zip_path = f"{Config.funct_zip_path}/{key}"
 
     Config.logger.info(
@@ -219,24 +257,26 @@ def download_and_extract_module(module_name: str) -> None:
     Config.logger.info(f"Extracted module to {Config.funct_extract_path}")
 
 
-def get_function(
-    module_name: str, function_name: str, source=None
-) -> Optional[Callable]:
+def get_class(
+    package_name: str, module_name: str, class_name: str, source: str = None
+) -> Optional[type]:
     try:
         if source is None:
-            return getattr(__import__(module_name), function_name)
+            return getattr(__import__(module_name), class_name)
 
+        # Check if the module exists
         if not module_exists(module_name):
             # Download and extract the module if it doesn't exist
-            download_and_extract_module(module_name)
+            download_and_extract_package(package_name)
 
         # Add the extracted module to sys.path
         module_path = f"{Config.funct_extract_path}/{module_name}"
         if module_path not in sys.path:
             sys.path.append(module_path)
 
-        return getattr(__import__(module_name), function_name)
-
+        # Import the module and get the class
+        module = __import__(module_name)
+        return getattr(module, class_name)
     except Exception as e:
         log = traceback.format_exc()
         Config.logger.error(log)
@@ -250,14 +290,9 @@ def execute_tool_function(
     arguments: Dict[str, Any],
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
     try:
+        config = get_mcp_configuration_with_retry(endpoint_id)
         tool = next(
-            (
-                tool
-                for tool in Config.fetch_mcp_configuration(endpoint_id)["tools"][
-                    "tools"
-                ]
-                if tool["name"] == name
-            ),
+            (tool for tool in config["tools"] if tool["name"] == name),
             {},
         )
 
@@ -267,34 +302,53 @@ def execute_tool_function(
                 if key not in arguments.keys():
                     raise Exception(f"Missing argument {key}")
 
-        tool_module = next(
+        module_link = next(
             (
-                tool_module
-                for tool_module in Config.fetch_mcp_configuration(endpoint_id)["tools"][
-                    "tool_modules"
-                ]
-                if tool_module["name"] == name
+                module_link
+                for module_link in config["module_links"]
+                if module_link["name"] == name and module_link["type"] == "tool"
             ),
             {},
         )
 
-        tool_function = get_function(
-            tool_module["module_name"],
-            tool_module["function_name"],
-            source=tool_module.get("source"),
+        module = next(
+            (
+                module
+                for module in config["modules"]
+                if (
+                    module["module_name"] == module_link["module_name"]
+                    and module["class_name"] == module_link["class_name"]
+                )
+            ),
+            {},
+        )
+
+        tool_class = get_class(
+            module["package_name"],
+            module["module_name"],
+            module["class_name"],
+            source=module.get("source"),
+        )
+
+        tool_function = getattr(
+            tool_class(
+                Config.logger,
+                **Utility.json_loads(Utility.json_dumps(module["setting"])),
+            ),
+            module_link["function_name"],
         )
 
         if "endpoint_id" not in arguments:
             arguments["endpoint_id"] = endpoint_id
 
-        result = tool_function(Config.logger, tool_module["setting"], **arguments)
-        if tool_module["return_type"] == "text":
+        result = tool_function(**arguments)
+        if module_link["return_type"] == "text":
             # Handle dict result by converting to JSON representation
             if isinstance(result, dict):
                 return [TextContent(type="text", text=Utility.json_dumps(result))]
             return [TextContent(type="text", text=result)]
         else:
-            raise Exception(f"Invalid return type {tool_module['return_type']}")
+            raise Exception(f"Invalid return type {module_link['return_type']}")
 
     except Exception as e:
         log = traceback.format_exc()
@@ -308,35 +362,50 @@ def execute_resource_function(
     uri: str,
 ) -> str:
     try:
+        config = get_mcp_configuration_with_retry(endpoint_id)
         resource = next(
+            (resource for resource in config["resources"] if resource["uri"] == uri),
+            {},
+        )
+
+        module_link = next(
             (
-                resource
-                for resource in Config.fetch_mcp_configuration(endpoint_id)[
-                    "resources"
-                ]["resources"]
-                if resource["uri"] == uri
+                module_link
+                for module_link in config["module_links"]
+                if module_link["name"] == resource["name"]
+                and module_link["type"] == "resource"
             ),
             {},
         )
 
-        resource_module = next(
+        module = next(
             (
-                resource_module
-                for resource_module in Config.fetch_mcp_configuration(endpoint_id)[
-                    "resources"
-                ]["resource_modules"]
-                if resource_module["name"] == resource["name"]
+                module
+                for module in config["modules"]
+                if (
+                    module["module_name"] == module_link["module_name"]
+                    and module["class_name"] == module_link["class_name"]
+                )
             ),
             {},
         )
 
-        resource_function = get_function(
-            resource_module["module_name"],
-            resource_module["function_name"],
-            source=resource_module.get("source"),
+        resource_class = get_class(
+            module["package_name"],
+            module["module_name"],
+            module["class_name"],
+            source=module.get("source"),
         )
 
-        result = resource_function(Config.logger, resource_module["setting"], uri)
+        resource_function = getattr(
+            resource_class(
+                Config.logger,
+                **Utility.json_loads(Utility.json_dumps(module["setting"])),
+            ),
+            module_link["function_name"],
+        )
+
+        result = resource_function(uri)
         return result
 
     except Exception as e:
@@ -350,16 +419,11 @@ def execute_prompt_function(
     endpoint_id: str,
     name: str,
     arguments: Dict[str, Any],
-) -> list[TextContent | ImageContent | EmbeddedResource]:
+) -> GetPromptResult:
     try:
+        config = get_mcp_configuration_with_retry(endpoint_id)
         prompt = next(
-            (
-                prompt
-                for prompt in Config.fetch_mcp_configuration(endpoint_id)["prompts"][
-                    "prompts"
-                ]
-                if prompt["name"] == name
-            ),
+            (prompt for prompt in config["prompts"] if prompt["name"] == name),
             {},
         )
 
@@ -369,26 +433,46 @@ def execute_prompt_function(
                 if arg.get("required", False) and arg["name"] not in arguments.keys():
                     raise Exception(f"Missing required argument {arg['name']}")
 
-        prompt_module = next(
+        module_link = next(
             (
-                prompt_module
-                for prompt_module in Config.fetch_mcp_configuration(endpoint_id)[
-                    "prompts"
-                ]["prompt_modules"]
-                if prompt_module["name"] == name
+                module_link
+                for module_link in config["module_links"]
+                if module_link["name"] == name and module_link["type"] == "prompt"
             ),
             {},
         )
 
-        prompt_function = get_function(
-            prompt_module["module_name"],
-            prompt_module["function_name"],
-            source=prompt_module.get("source"),
+        module = next(
+            (
+                module
+                for module in config["modules"]
+                if (
+                    module["module_name"] == module_link["module_name"]
+                    and module["class_name"] == module_link["class_name"]
+                )
+            ),
+            {},
         )
 
-        result = prompt_function(
-            Config.logger, prompt_module["setting"], name, **arguments
+        prompt_class = get_class(
+            module["package_name"],
+            module["module_name"],
+            module["class_name"],
+            source=module.get("source"),
         )
+
+        prompt_function = getattr(
+            prompt_class(
+                Config.logger,
+                **Utility.json_loads(Utility.json_dumps(module["setting"])),
+            ),
+            module_link["function_name"],
+        )
+
+        if "endpoint_id" not in arguments:
+            arguments["endpoint_id"] = endpoint_id
+
+        result = prompt_function(name, **arguments)
 
         return GetPromptResult(
             description=prompt["description"],
