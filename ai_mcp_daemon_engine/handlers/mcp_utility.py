@@ -87,7 +87,7 @@ def execute_decorator():
                                 resource
                                 for resource in Config.fetch_mcp_configuration(
                                     endpoint_id
-                                )["resources"]["resources"]
+                                )["resources"]
                                 if resource["uri"] == args[1]
                             ),
                             None,
