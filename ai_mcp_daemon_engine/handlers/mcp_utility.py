@@ -374,6 +374,80 @@ def get_class(
         raise e
 
 
+def _validate_nested_structure(
+    schema: Dict[str, Any], data: Dict[str, Any], field_path: str = ""
+) -> None:
+    """
+    Private function to recursively validate required fields in nested objects and arrays.
+
+    Args:
+        schema: JSON schema definition for the data structure
+        data: The actual data to validate
+        field_path: Current field path for error reporting
+    """
+    import copy
+
+    if schema.get("type") == "object" and "properties" in schema:
+        # Handle object validation
+        nested_required = schema.get("required", [])
+        nested_properties = schema["properties"]
+
+        for nested_key, nested_schema in nested_properties.items():
+            nested_path = f"{field_path}.{nested_key}" if field_path else nested_key
+
+            if nested_key not in data:
+                if "default" in nested_schema:
+                    default_value = nested_schema["default"]
+                    if isinstance(default_value, (dict, list)):
+                        data[nested_key] = copy.deepcopy(default_value)
+                    else:
+                        data[nested_key] = default_value
+                elif nested_key in nested_required:
+                    raise Exception(f"Missing required argument: {nested_path}")
+            else:
+                # Recursively validate nested structures
+                _validate_nested_structure(nested_schema, data[nested_key], nested_path)
+
+    elif schema.get("type") == "array" and "items" in schema:
+        # Handle array validation
+        items_schema = schema["items"]
+        if isinstance(data, list):
+            for i, item in enumerate(data):
+                item_path = f"{field_path}[{i}]" if field_path else f"[{i}]"
+                _validate_nested_structure(items_schema, item, item_path)
+
+
+def _validate_and_set_defaults(
+    tool_schema: Dict[str, Any], arguments: Dict[str, Any]
+) -> None:
+    """
+    Private function to validate arguments and set default values based on tool schema.
+    Handles nested objects and arrays with required field validation.
+    """
+    import copy
+
+    if not tool_schema.get("inputSchema", {}).get("properties"):
+        return
+
+    schema_properties = tool_schema["inputSchema"]["properties"]
+    required_fields = tool_schema["inputSchema"].get("required", [])
+
+    # Handle top-level properties
+    for key, schema in schema_properties.items():
+        if key not in arguments:
+            if "default" in schema:
+                default_value = schema["default"]
+                if isinstance(default_value, (dict, list)):
+                    arguments[key] = copy.deepcopy(default_value)
+                else:
+                    arguments[key] = default_value
+            elif key in required_fields:
+                raise Exception(f"Missing required argument: {key}")
+        else:
+            # Validate provided arguments
+            _validate_nested_structure(schema, arguments[key], key)
+
+
 @execute_decorator()
 def execute_tool_function(
     endpoint_id: str,
@@ -388,11 +462,8 @@ def execute_tool_function(
             {},
         )
 
-        # Check if arguments have all required properties from input schema
-        if tool.get("inputSchema", {}).get("properties"):
-            for key in tool["inputSchema"]["properties"].keys():
-                if key not in arguments.keys():
-                    raise Exception(f"Missing argument {key}")
+        # Validate arguments and set defaults using the tool schema
+        _validate_and_set_defaults(tool, arguments)
 
         module_link = next(
             (
@@ -665,6 +736,26 @@ def async_execute_tool_function(
     name: str,
     arguments: Dict[str, Any],
 ):
+    if arguments.get("mcp_function_call_uuid"):
+        response = Config.mcp_core.mcp_core_graphql(
+            **{
+                "endpoint_id": endpoint_id,
+                "query": MCP_FUNCTION_CALL,
+                "variables": {
+                    "mcpFunctionCallUuid": arguments["mcp_function_call_uuid"],
+                },
+            }
+        )
+        response = Utility.json_loads(response)
+
+        if "errors" in response:
+            Config.logger.error(f"GraphQL error: {response['errors']}")
+            raise Exception(response["errors"])
+
+        mcp_function_call = response["data"]["mcpFunctionCall"]
+
+        return [TextContent(type="text", text=mcp_function_call["content"])]
+
     Config.logger.info("Making GraphQL call to insert/update MCP function")
     response = Config.mcp_core.mcp_core_graphql(
         **{
