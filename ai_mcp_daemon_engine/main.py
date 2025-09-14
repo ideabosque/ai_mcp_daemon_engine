@@ -109,6 +109,29 @@ class AIMCPDaemonEngine(object):
 
         return Utility.json_dumps(asyncio.run(process_mcp_message(endpoint_id, params)))
 
+    def async_execute_tool_function(self, **params: Dict[str, Any]) -> None:
+        endpoint_id = params.pop("endpoint_id", None)
+        ## Test the waters 🧪 before diving in!
+        ##<--Testing Data-->##
+        if endpoint_id is None:
+            endpoint_id = self.setting.get("endpoint_id")
+        ##<--Testing Data-->##
+
+        name = params.get("name", None)
+        arguments = params.get("arguments", None)
+        mcp_function_call_uuid = params.get("mcp_function_call_uuid", None)
+        if name is None or arguments is None or mcp_function_call_uuid is None:
+            raise ValueError(
+                "Missing required parameters: name, arguments and mcp_function_call_uuid must be provided"
+            )
+
+        from .handlers.mcp_utility import execute_tool_function
+
+        execute_tool_function(
+            endpoint_id, name, arguments, mcp_function_call_uuid=mcp_function_call_uuid
+        )
+        return
+
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         return Config.mcp_core.mcp_core_graphql(**params)
 

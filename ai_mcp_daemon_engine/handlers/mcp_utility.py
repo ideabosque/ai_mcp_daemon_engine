@@ -4,25 +4,60 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
+import asyncio
+import concurrent.futures
 import functools
 import os
 import sys
+import threading
 import traceback
 import zipfile
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 from mcp.types import (
     EmbeddedResource,
     GetPromptResult,
     ImageContent,
     PromptMessage,
+    ReadResourceResult,
     TextContent,
+    TextResourceContents,
 )
 
 from silvaengine_utility import Utility
 
 from .config import Config
+
+# Global registry to track active background threads
+_active_threads = []
+
+
+def wait_for_background_threads(timeout=30):
+    """Wait for all background threads to complete before shutdown."""
+    if not _active_threads:
+        return
+
+    Config.logger.info(
+        f"Waiting for {len(_active_threads)} background threads to complete..."
+    )
+
+    for thread in _active_threads[
+        :
+    ]:  # Copy list to avoid modification during iteration
+        if thread.is_alive():
+            Config.logger.info(
+                f"Waiting for thread {thread.name if hasattr(thread, 'name') else 'unnamed'}..."
+            )
+            thread.join(timeout=timeout)
+            if thread.is_alive():
+                Config.logger.warning(
+                    f"Thread {thread.name if hasattr(thread, 'name') else 'unnamed'} did not complete within {timeout}s"
+                )
+
+    _active_threads.clear()
+    Config.logger.info("Background thread cleanup completed")
+
 
 INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
     $arguments: JSON, 
@@ -64,6 +99,24 @@ INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
 }"""
 
 
+MCP_FUNCTION_CALL = """query mcpFunctionCall($mcpFunctionCallUuid: String!) {
+    mcpFunctionCall(mcpFunctionCallUuid: $mcpFunctionCallUuid) {
+        endpointId 
+        mcpFunctionCallUuid 
+        mcpType 
+        name 
+        arguments 
+        content 
+        status 
+        notes 
+        timeSpent 
+        updatedBy 
+        createdAt 
+        updatedAt
+    }
+}"""
+
+
 def execute_decorator():
     def actual_decorator(original_function):
         @functools.wraps(original_function)
@@ -73,7 +126,26 @@ def execute_decorator():
                 mcp_function_call = None
                 start_time = datetime.now()
                 endpoint_id = args[0]
-                if endpoint_id != "default":
+
+                if kwargs.get("mcp_function_call_uuid"):
+                    response = Config.mcp_core.mcp_core_graphql(
+                        **{
+                            "endpoint_id": endpoint_id,
+                            "query": MCP_FUNCTION_CALL,
+                            "variables": {
+                                "mcpFunctionCallUuid": kwargs["mcp_function_call_uuid"],
+                            },
+                        }
+                    )
+                    response = Utility.json_loads(response)
+
+                    if "errors" in response:
+                        Config.logger.error(f"GraphQL error: {response['errors']}")
+                        raise Exception(response["errors"])
+
+                    mcp_function_call = response["data"]["mcpFunctionCall"]
+
+                if endpoint_id != "default" and mcp_function_call is None:
                     Config.logger.info(f"Processing endpoint_id: {endpoint_id}")
                     mcp_type = original_function.__name__.replace(
                         "execute_", ""
@@ -133,6 +205,25 @@ def execute_decorator():
                 Config.logger.info("Executing original function")
                 result = original_function(*args, **kwargs)
 
+                content = None
+                if isinstance(result, list):
+                    content = []
+                    for item in result:
+                        if isinstance(item, EmbeddedResource):
+                            content.append(item.model_dump())
+                        elif isinstance(item, TextContent):
+                            content.append(item.model_dump())
+                        elif isinstance(item, ImageContent):
+                            content.append(item.model_dump())
+                        else:
+                            content.append(item)
+                elif isinstance(result, (ReadResourceResult, GetPromptResult)):
+                    # Handle MCP structured result types
+                    content = result.model_dump()
+                else:
+                    # Handle other types (strings, dicts, etc.)
+                    content = result
+
                 if mcp_function_call is not None:
                     end_time = datetime.now()
                     time_spent = int((end_time - start_time).total_seconds() * 1000)
@@ -147,7 +238,7 @@ def execute_decorator():
                                 "mcpFunctionCallUuid": mcp_function_call[
                                     "mcpFunctionCallUuid"
                                 ],
-                                "content": result,
+                                "content": Utility.json_dumps(content),
                                 "status": "completed",
                                 "timeSpent": time_spent,
                                 "updatedBy": "mcp_daemon_engine",
@@ -288,6 +379,7 @@ def execute_tool_function(
     endpoint_id: str,
     name: str,
     arguments: Dict[str, Any],
+    mcp_function_call_uuid: str = None,
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
     try:
         config = get_mcp_configuration_with_retry(endpoint_id)
@@ -341,14 +433,48 @@ def execute_tool_function(
         if "endpoint_id" not in arguments:
             arguments["endpoint_id"] = endpoint_id
 
-        result = tool_function(**arguments)
-        if module_link["return_type"] == "text":
+        if module_link.get("is_async", False):
+            if Config.aws_lambda:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, tool_function(**arguments))
+                    result = future.result()
+            else:
+                result = asyncio.run(tool_function(**arguments))
+        else:
+            result = tool_function(**arguments)
+
+        return_type = module_link["return_type"]
+
+        if return_type == "text":
             # Handle dict result by converting to JSON representation
             if isinstance(result, dict):
                 return [TextContent(type="text", text=Utility.json_dumps(result))]
-            return [TextContent(type="text", text=result)]
+            return [TextContent(type="text", text=str(result))]
+
+        elif return_type == "image":
+            # Handle image results
+            if isinstance(result, dict):
+                # Expected format: {"data": "base64_data", "mimeType": "image/png"}
+                return [
+                    ImageContent(
+                        type="image",
+                        data=result.get("data", ""),
+                        mimeType=result.get("mimeType", "image/png"),
+                    )
+                ]
+            elif isinstance(result, str):
+                # Assume base64 encoded PNG if just string
+                return [ImageContent(type="image", data=result, mimeType="image/png")]
+            else:
+                raise Exception(f"Invalid image result format: {type(result)}")
+
+        elif return_type == "embedded_resource":
+            return _create_embedded_resource_from_result(result)
+
         else:
-            raise Exception(f"Invalid return type {module_link['return_type']}")
+            raise Exception(
+                f"Invalid return type {return_type}. Supported types: text, image, resource"
+            )
 
     except Exception as e:
         log = traceback.format_exc()
@@ -356,11 +482,49 @@ def execute_tool_function(
         raise e
 
 
+def _create_embedded_resource_from_result(result) -> list[EmbeddedResource]:
+    """Convert function result to EmbeddedResource with proper TextResourceContents."""
+    # Extract resource data and determine content
+    resource_data = (
+        result.get("resource", result) if isinstance(result, dict) else result
+    )
+
+    if isinstance(resource_data, dict) and "text" in resource_data:
+        # Use existing text content
+        text_content = str(resource_data["text"])
+        mime_type = resource_data.get("mimeType")
+
+        # Auto-detect JSON if no mimeType provided
+        if not mime_type:
+            try:
+                Utility.json_loads(text_content)
+                mime_type = "application/json"
+            except:
+                mime_type = "text/plain"
+    else:
+        # Convert to JSON string (for dicts) or plain string
+        if isinstance(resource_data, dict):
+            text_content = Utility.json_dumps(resource_data)
+            mime_type = resource_data.get("mimeType", "application/json")
+        else:
+            text_content = str(resource_data)
+            mime_type = "text/plain"
+
+    return [
+        EmbeddedResource(
+            type="resource",
+            resource=TextResourceContents(
+                text=text_content, mimeType=mime_type or "text/plain"
+            ),
+        )
+    ]
+
+
 @execute_decorator()
 def execute_resource_function(
     endpoint_id: str,
     uri: str,
-) -> str:
+) -> ReadResourceResult:
     try:
         config = get_mcp_configuration_with_retry(endpoint_id)
         resource = next(
@@ -406,7 +570,13 @@ def execute_resource_function(
         )
 
         result = resource_function(uri)
-        return result
+
+        # Return properly structured ReadResourceResult according to MCP specification
+        return ReadResourceResult(
+            contents=[
+                TextResourceContents(uri=uri, mimeType="text/plain", text=str(result))
+            ]
+        )
 
     except Exception as e:
         log = traceback.format_exc()
@@ -488,3 +658,88 @@ def execute_prompt_function(
         log = traceback.format_exc()
         Config.logger.error(log)
         raise e
+
+
+def async_execute_tool_function(
+    endpoint_id: str,
+    name: str,
+    arguments: Dict[str, Any],
+):
+    Config.logger.info("Making GraphQL call to insert/update MCP function")
+    response = Config.mcp_core.mcp_core_graphql(
+        **{
+            "endpoint_id": endpoint_id,
+            "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
+            "variables": {
+                "name": name,
+                "mcpType": "tool",
+                "arguments": arguments,
+                "updatedBy": "mcp_daemon_engine",
+            },
+        }
+    )
+    response = Utility.json_loads(response)
+
+    if "errors" in response:
+        Config.logger.error(f"GraphQL error: {response['errors']}")
+        raise Exception(response["errors"])
+
+    mcp_function_call = response["data"]["insertUpdateMcpFunctionCall"][
+        "mcpFunctionCall"
+    ]
+    Config.logger.info("Successfully created MCP function call")
+
+    params = {
+        "name": name,
+        "arguments": arguments,
+        "mcp_function_call_uuid": mcp_function_call["mcpFunctionCallUuid"],
+    }
+
+    if Config.aws_lambda:
+        # Invoke Lambda function asynchronously
+        Config.logger.info("Invoking Lambda function asynchronously")
+        Utility.invoke_funct_on_aws_lambda(
+            Config.logger,
+            endpoint_id,
+            "async_execute_tool_function",
+            params=params,
+            setting=Config.setting,
+            test_mode=Config.setting.get("test_mode"),
+            aws_lambda=Config.aws_lambda,
+            invocation_type="Event",
+        )
+    else:
+        Config.logger.info("Dispatching execute_tool_function in a separate thread")
+        thread = threading.Thread(
+            target=execute_tool_function,
+            args=(
+                endpoint_id,
+                name,
+                arguments,
+            ),
+            kwargs={"mcp_function_call_uuid": mcp_function_call["mcpFunctionCallUuid"]},
+            daemon=False,  # Changed to False so thread won't be killed when main process exits
+        )
+        thread.start()
+
+        # Register thread for tracking
+        _active_threads.append(thread)
+        Config.logger.info(
+            f"Tool function {name} started in background thread (active threads: {len(_active_threads)})"
+        )
+
+        # Clean up completed threads
+        _active_threads[:] = [t for t in _active_threads if t.is_alive()]
+
+    return [
+        EmbeddedResource(
+            type="resource",
+            resource=TextResourceContents(
+                uri=f"mcp://function-call/{mcp_function_call['mcpFunctionCallUuid']}",
+                text=Utility.json_dumps(
+                    {"mcp_function_call_uuid": mcp_function_call["mcpFunctionCallUuid"]}
+                ),
+                mimeType="application/json",
+            ),
+        )
+    ]

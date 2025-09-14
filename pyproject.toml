@@ -12,6 +12,7 @@ dependencies = [
   "bcrypt",
   "passlib[bcrypt]",
   "graphene",
+  "python-dotenv",
   "SilvaEngine-DynamoDB-Base",
   "SilvaEngine-Utility",
 ]

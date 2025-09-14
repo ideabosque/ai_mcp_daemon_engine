@@ -12,6 +12,7 @@ from typing import Any, Dict
 import pendulum
 from graphene import ResolveInfo
 from pynamodb.attributes import (
+    BooleanAttribute,
     MapAttribute,
     NumberAttribute,
     UnicodeAttribute,
@@ -61,6 +62,7 @@ class MCPFunctionModel(BaseModel):
     class_name = UnicodeAttribute(null=True)
     function_name = UnicodeAttribute(null=True)
     return_type = UnicodeAttribute(null=True)
+    is_async = BooleanAttribute(null=True)
     updated_by = UnicodeAttribute()
     created_at = UTCDateTimeAttribute()
     updated_at = UTCDateTimeAttribute()
@@ -181,6 +183,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
             "class_name",
             "function_name",
             "return_type",
+            "is_async",
         ]:
             if key in kwargs:
                 cols[key] = kwargs[key]
@@ -207,6 +210,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         "class_name": MCPFunctionModel.class_name,
         "function_name": MCPFunctionModel.function_name,
         "return_type": MCPFunctionModel.return_type,
+        "is_async": MCPFunctionModel.is_async,
     }
 
     for key, field in field_map.items():

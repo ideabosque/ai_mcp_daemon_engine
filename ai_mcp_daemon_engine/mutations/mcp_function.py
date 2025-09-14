@@ -27,6 +27,7 @@ class InsertUpdateMcpFunction(Mutation):
         class_name = String(required=False)
         function_name = String(required=False)
         return_type = String(required=False)
+        is_async = Boolean(required=False)
         updated_by = String(required=True)
 
     @staticmethod

@@ -23,6 +23,7 @@ from mcp.types import (
 
 from .config import Config
 from .mcp_utility import (
+    async_execute_tool_function,
     execute_prompt_function,
     execute_resource_function,
     execute_tool_function,
@@ -54,6 +55,21 @@ async def call_tool(
     tools = config["tools"]
     if not any(tool["name"] == name for tool in tools):
         raise ValueError(f"Unknown tool: {name}")
+
+    module_link = next(
+        (
+            module_link
+            for module_link in config["module_links"]
+            if module_link["name"] == name and module_link["type"] == "tool"
+        ),
+        {},
+    )
+    if module_link.get("is_async", False):
+        if endpoint_id == "default":
+            raise ValueError(
+                "Async tools are not supported with default endpoint_id - please provide a specific endpoint_id"
+            )
+        return async_execute_tool_function(endpoint_id, name, arguments)
 
     return execute_tool_function(endpoint_id, name, arguments)
 
@@ -163,8 +179,8 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             serialized_content = []
             for item in result:
                 if hasattr(item, "model_dump"):
-                    # Use Pydantic model serialization if available
-                    serialized_content.append(item.model_dump())
+                    # Use Pydantic model serialization if available with JSON mode for proper URL serialization
+                    serialized_content.append(item.model_dump(mode="json"))
                 else:
                     # Manual serialization for TextContent, ImageContent, etc.
                     content_dict = {
@@ -181,7 +197,12 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
                     if hasattr(item, "uri"):
                         content_dict["uri"] = item.uri
                     if hasattr(item, "resource"):
-                        content_dict["resource"] = item.resource
+                        if hasattr(item.resource, "model_dump"):
+                            content_dict["resource"] = item.resource.model_dump(
+                                mode="json"
+                            )
+                        else:
+                            content_dict["resource"] = item.resource
                     # Add _meta field as empty object if not present
                     content_dict["_meta"] = getattr(item, "_meta", {})
                     serialized_content.append(content_dict)
