@@ -246,6 +246,7 @@ def execute_decorator():
                         }
                     )
 
+                    response = Utility.json_loads(response)
                     if "errors" in response:
                         Config.logger.error(f"GraphQL error: {response['errors']}")
                         raise Exception(response["errors"])
@@ -754,7 +755,30 @@ def async_execute_tool_function(
 
         mcp_function_call = response["data"]["mcpFunctionCall"]
 
-        return [TextContent(type="text", text=mcp_function_call["content"])]
+        if mcp_function_call["status"] == "completed":
+            Config.logger.info(
+                f"Tool function {name} already completed. Skipping execution."
+            )
+            return [TextContent(type="text", text=mcp_function_call["content"])]
+        else:
+            return [
+                EmbeddedResource(
+                    type="resource",
+                    resource=TextResourceContents(
+                        uri=f"mcp://function-call/{mcp_function_call['mcpFunctionCallUuid']}",
+                        text=Utility.json_dumps(
+                            {
+                                "mcp_function_call_uuid": mcp_function_call[
+                                    "mcpFunctionCallUuid"
+                                ],
+                                "status": mcp_function_call["status"],
+                                "notes": mcp_function_call.get("notes"),
+                            }
+                        ),
+                        mimeType="application/json",
+                    ),
+                )
+            ]
 
     Config.logger.info("Making GraphQL call to insert/update MCP function")
     response = Config.mcp_core.mcp_core_graphql(
@@ -828,7 +852,12 @@ def async_execute_tool_function(
             resource=TextResourceContents(
                 uri=f"mcp://function-call/{mcp_function_call['mcpFunctionCallUuid']}",
                 text=Utility.json_dumps(
-                    {"mcp_function_call_uuid": mcp_function_call["mcpFunctionCallUuid"]}
+                    {
+                        "mcp_function_call_uuid": mcp_function_call[
+                            "mcpFunctionCallUuid"
+                        ],
+                        "status": "in_progress",
+                    }
                 ),
                 mimeType="application/json",
             ),
