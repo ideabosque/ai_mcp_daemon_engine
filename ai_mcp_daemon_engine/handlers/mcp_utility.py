@@ -10,6 +10,7 @@ import functools
 import os
 import sys
 import threading
+import time
 import traceback
 import zipfile
 from datetime import datetime
@@ -117,6 +118,83 @@ MCP_FUNCTION_CALL = """query mcpFunctionCall($mcpFunctionCallUuid: String!) {
 }"""
 
 
+def _check_existing_function_call(
+    endpoint_id: str, mcp_function_call_uuid: str
+) -> Dict[str, Any]:
+    response = Config.mcp_core.mcp_core_graphql(
+        **{
+            "endpoint_id": endpoint_id,
+            "query": MCP_FUNCTION_CALL,
+            "variables": {
+                "mcpFunctionCallUuid": mcp_function_call_uuid,
+            },
+        }
+    )
+    response = Utility.json_loads(response)
+
+    if "errors" in response:
+        Config.logger.error(f"GraphQL error: {response['errors']}")
+        raise Exception(response["errors"])
+
+    mcp_function_call = response["data"]["mcpFunctionCall"]
+
+    return mcp_function_call
+
+
+def _insert_update_mcp_function_call(
+    endpoint_id: str, **kwargs: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Private helper function to insert/update MCP function call record
+    """
+    if kwargs.get("mcp_function_call_uuid"):
+        Config.logger.info("Updating existing MCP function call")
+        response = Config.mcp_core.mcp_core_graphql(
+            **{
+                "endpoint_id": endpoint_id,
+                "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
+                "variables": {
+                    "mcpFunctionCallUuid": kwargs["mcp_function_call_uuid"],
+                    "content": (
+                        Utility.json_dumps(kwargs["content"])
+                        if kwargs.get("content")
+                        else None
+                    ),
+                    "status": kwargs["status"],
+                    "timeSpent": kwargs.get("time_spent", None),
+                    "notes": kwargs.get("notes", None),
+                    "updatedBy": "mcp_daemon_engine",
+                },
+            }
+        )
+    else:
+        Config.logger.info("Making GraphQL call to insert/update MCP function")
+        response = Config.mcp_core.mcp_core_graphql(
+            **{
+                "endpoint_id": endpoint_id,
+                "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
+                "variables": {
+                    "name": kwargs["name"],
+                    "mcpType": kwargs["mcp_type"],
+                    "arguments": kwargs["arguments"],
+                    "updatedBy": "mcp_daemon_engine",
+                },
+            }
+        )
+
+    response = Utility.json_loads(response)
+
+    if "errors" in response:
+        Config.logger.error(f"GraphQL error: {response['errors']}")
+        raise Exception(response["errors"])
+
+    mcp_function_call = response["data"]["insertUpdateMcpFunctionCall"][
+        "mcpFunctionCall"
+    ]
+
+    return mcp_function_call
+
+
 def execute_decorator():
     def actual_decorator(original_function):
         @functools.wraps(original_function)
@@ -128,22 +206,9 @@ def execute_decorator():
                 endpoint_id = args[0]
 
                 if kwargs.get("mcp_function_call_uuid"):
-                    response = Config.mcp_core.mcp_core_graphql(
-                        **{
-                            "endpoint_id": endpoint_id,
-                            "query": MCP_FUNCTION_CALL,
-                            "variables": {
-                                "mcpFunctionCallUuid": kwargs["mcp_function_call_uuid"],
-                            },
-                        }
+                    mcp_function_call = _check_existing_function_call(
+                        endpoint_id, kwargs["mcp_function_call_uuid"]
                     )
-                    response = Utility.json_loads(response)
-
-                    if "errors" in response:
-                        Config.logger.error(f"GraphQL error: {response['errors']}")
-                        raise Exception(response["errors"])
-
-                    mcp_function_call = response["data"]["mcpFunctionCall"]
 
                 if endpoint_id != "default" and mcp_function_call is None:
                     Config.logger.info(f"Processing endpoint_id: {endpoint_id}")
@@ -176,31 +241,10 @@ def execute_decorator():
                             f"Function name: {name}, arguments: {arguments}"
                         )
 
-                    Config.logger.info(
-                        "Making GraphQL call to insert/update MCP function"
+                    mcp_function_call = _insert_update_mcp_function_call(
+                        endpoint_id,
+                        **{"name": name, "mcp_type": mcp_type, "arguments": arguments},
                     )
-                    response = Config.mcp_core.mcp_core_graphql(
-                        **{
-                            "endpoint_id": endpoint_id,
-                            "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
-                            "variables": {
-                                "name": name,
-                                "mcpType": mcp_type,
-                                "arguments": arguments,
-                                "updatedBy": "mcp_daemon_engine",
-                            },
-                        }
-                    )
-                    response = Utility.json_loads(response)
-
-                    if "errors" in response:
-                        Config.logger.error(f"GraphQL error: {response['errors']}")
-                        raise Exception(response["errors"])
-
-                    mcp_function_call = response["data"]["insertUpdateMcpFunctionCall"][
-                        "mcpFunctionCall"
-                    ]
-                    Config.logger.info("Successfully created MCP function call")
 
                 Config.logger.info("Executing original function")
                 result = original_function(*args, **kwargs)
@@ -230,26 +274,18 @@ def execute_decorator():
                     Config.logger.info(f"Function execution time: {time_spent}ms")
 
                     Config.logger.info("Updating MCP function call with results")
-                    response = Config.mcp_core.mcp_core_graphql(
+                    _insert_update_mcp_function_call(
+                        endpoint_id,
                         **{
-                            "endpoint_id": endpoint_id,
-                            "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
-                            "variables": {
-                                "mcpFunctionCallUuid": mcp_function_call[
-                                    "mcpFunctionCallUuid"
-                                ],
-                                "content": Utility.json_dumps(content),
-                                "status": "completed",
-                                "timeSpent": time_spent,
-                                "updatedBy": "mcp_daemon_engine",
-                            },
-                        }
+                            "mcp_function_call_uuid": mcp_function_call[
+                                "mcpFunctionCallUuid"
+                            ],
+                            "content": content,
+                            "status": "completed",
+                            "time_spent": time_spent,
+                            "updatedBy": "mcp_daemon_engine",
+                        },
                     )
-
-                    response = Utility.json_loads(response)
-                    if "errors" in response:
-                        Config.logger.error(f"GraphQL error: {response['errors']}")
-                        raise Exception(response["errors"])
 
                 Config.logger.info("Successfully completed MCP function execution")
                 return result
@@ -259,19 +295,16 @@ def execute_decorator():
                 Config.logger.error(f"Error in MCP function execution: {log}")
                 if mcp_function_call is not None:
                     Config.logger.info("Updating MCP function call with error status")
-                    response = Config.mcp_core.mcp_core_graphql(
+                    _insert_update_mcp_function_call(
+                        mcp_function_call["endpointId"],
                         **{
-                            "endpoint_id": mcp_function_call["endpointId"],
-                            "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
-                            "variables": {
-                                "mcpFunctionCallUuid": mcp_function_call[
-                                    "mcpFunctionCallUuid"
-                                ],
-                                "notes": log,
-                                "status": "failed",
-                                "updatedBy": "mcp_daemon_engine",
-                            },
-                        }
+                            "mcp_function_call_uuid": mcp_function_call[
+                                "mcpFunctionCallUuid"
+                            ],
+                            "notes": log,
+                            "status": "failed",
+                            "updatedBy": "mcp_daemon_engine",
+                        },
                     )
                 raise e
 
@@ -318,7 +351,7 @@ def get_mcp_configuration_with_retry(
                 raise
 
 
-def module_exists(module_name: str) -> bool:
+def _module_exists(module_name: str) -> bool:
     """Check if the module exists in the specified path."""
     module_dir = os.path.join(Config.funct_extract_path, module_name)
     if os.path.exists(module_dir) and os.path.isdir(module_dir):
@@ -332,7 +365,7 @@ def module_exists(module_name: str) -> bool:
     return False
 
 
-def download_and_extract_package(package_name: str) -> None:
+def _download_and_extract_package(package_name: str) -> None:
     """Download and extract the module from S3 if not already extracted."""
     key = f"{package_name}.zip"
     zip_path = f"{Config.funct_zip_path}/{key}"
@@ -349,7 +382,7 @@ def download_and_extract_package(package_name: str) -> None:
     Config.logger.info(f"Extracted module to {Config.funct_extract_path}")
 
 
-def get_class(
+def _get_class(
     package_name: str, module_name: str, class_name: str, source: str = None
 ) -> Optional[type]:
     try:
@@ -357,9 +390,9 @@ def get_class(
             return getattr(__import__(module_name), class_name)
 
         # Check if the module exists
-        if not module_exists(module_name):
+        if not _module_exists(module_name):
             # Download and extract the module if it doesn't exist
-            download_and_extract_package(package_name)
+            _download_and_extract_package(package_name)
 
         # Add the extracted module to sys.path
         module_path = f"{Config.funct_extract_path}/{module_name}"
@@ -487,7 +520,7 @@ def execute_tool_function(
             {},
         )
 
-        tool_class = get_class(
+        tool_class = _get_class(
             module["package_name"],
             module["module_name"],
             module["class_name"],
@@ -626,7 +659,7 @@ def execute_resource_function(
             {},
         )
 
-        resource_class = get_class(
+        resource_class = _get_class(
             module["package_name"],
             module["module_name"],
             module["class_name"],
@@ -696,7 +729,7 @@ def execute_prompt_function(
             {},
         )
 
-        prompt_class = get_class(
+        prompt_class = _get_class(
             module["package_name"],
             module["module_name"],
             module["class_name"],
@@ -738,22 +771,9 @@ def async_execute_tool_function(
     arguments: Dict[str, Any],
 ):
     if arguments.get("mcp_function_call_uuid"):
-        response = Config.mcp_core.mcp_core_graphql(
-            **{
-                "endpoint_id": endpoint_id,
-                "query": MCP_FUNCTION_CALL,
-                "variables": {
-                    "mcpFunctionCallUuid": arguments["mcp_function_call_uuid"],
-                },
-            }
+        mcp_function_call = _check_existing_function_call(
+            endpoint_id, arguments["mcp_function_call_uuid"]
         )
-        response = Utility.json_loads(response)
-
-        if "errors" in response:
-            Config.logger.error(f"GraphQL error: {response['errors']}")
-            raise Exception(response["errors"])
-
-        mcp_function_call = response["data"]["mcpFunctionCall"]
 
         if mcp_function_call["status"] == "completed":
             Config.logger.info(
@@ -846,6 +866,44 @@ def async_execute_tool_function(
         # Clean up completed threads
         _active_threads[:] = [t for t in _active_threads if t.is_alive()]
 
+    # Poll for function completion with 60 second timeout
+    # Checks the status of the function call periodically and returns the result when complete
+    # If timeout is reached, breaks the loop and returns a resource reference instead
+    start_time = time.time()
+    while True:
+        mcp_function_call = _check_existing_function_call(
+            endpoint_id, mcp_function_call["mcpFunctionCallUuid"]
+        )
+        if mcp_function_call["status"] == "completed":
+            Config.logger.info(f"Tool function {name} completed. Returning result.")
+            return [TextContent(type="text", text=mcp_function_call["content"])]
+        elif mcp_function_call["status"] == "failed":
+            Config.logger.info(f"Tool function {name} failed. Returning error message.")
+            break
+        else:
+            # Update the status to "in_process" if the current status is "initial"
+            if mcp_function_call["status"] == "initial":
+                mcp_function_call = _insert_update_mcp_function_call(
+                    endpoint_id,
+                    **{
+                        "mcp_function_call_uuid": mcp_function_call[
+                            "mcpFunctionCallUuid"
+                        ],
+                        "status": "in_process",
+                    },
+                )
+
+            if time.time() - start_time > 60:
+                Config.logger.warning(
+                    f"Tool function {name} timed out after 60 seconds"
+                )
+                break
+
+            Config.logger.info(
+                f"Tool function {name} not completed yet. Waiting for result."
+            )
+            time.sleep(1)
+
     return [
         EmbeddedResource(
             type="resource",
@@ -856,7 +914,8 @@ def async_execute_tool_function(
                         "mcp_function_call_uuid": mcp_function_call[
                             "mcpFunctionCallUuid"
                         ],
-                        "status": "in_progress",
+                        "status": mcp_function_call["status"],
+                        "notes": mcp_function_call.get("notes"),
                     }
                 ),
                 mimeType="application/json",
