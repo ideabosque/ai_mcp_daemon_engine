@@ -395,7 +395,7 @@ def _get_class(
             _download_and_extract_package(package_name)
 
         # Add the extracted module to sys.path
-        module_path = f"{Config.funct_extract_path}/{module_name}"
+        module_path = f"{Config.funct_extract_path}"
         if module_path not in sys.path:
             sys.path.append(module_path)
 
