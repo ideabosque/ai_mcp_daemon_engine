@@ -176,7 +176,9 @@ def _insert_update_mcp_function_call(
                 "variables": {
                     "name": kwargs["name"],
                     "mcpType": kwargs["mcp_type"],
-                    "arguments": kwargs["arguments"],
+                    "arguments": Utility.json_loads(
+                        Utility.json_dumps(kwargs["arguments"])
+                    ),
                     "updatedBy": "mcp_daemon_engine",
                 },
             }
@@ -801,27 +803,10 @@ def async_execute_tool_function(
             ]
 
     Config.logger.info("Making GraphQL call to insert/update MCP function")
-    response = Config.mcp_core.mcp_core_graphql(
-        **{
-            "endpoint_id": endpoint_id,
-            "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
-            "variables": {
-                "name": name,
-                "mcpType": "tool",
-                "arguments": arguments,
-                "updatedBy": "mcp_daemon_engine",
-            },
-        }
+    mcp_function_call = _insert_update_mcp_function_call(
+        endpoint_id,
+        **{"name": name, "mcp_type": "tool", "arguments": arguments},
     )
-    response = Utility.json_loads(response)
-
-    if "errors" in response:
-        Config.logger.error(f"GraphQL error: {response['errors']}")
-        raise Exception(response["errors"])
-
-    mcp_function_call = response["data"]["insertUpdateMcpFunctionCall"][
-        "mcpFunctionCall"
-    ]
     Config.logger.info("Successfully created MCP function call")
 
     params = {
