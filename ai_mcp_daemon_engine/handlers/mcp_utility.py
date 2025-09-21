@@ -177,7 +177,7 @@ def _insert_update_mcp_function_call(
                     "name": kwargs["name"],
                     "mcpType": kwargs["mcp_type"],
                     "arguments": Utility.json_loads(
-                        Utility.json_dumps(kwargs["arguments"])
+                        Utility.json_dumps(kwargs["arguments"]), parser_number=False
                     ),
                     "updatedBy": "mcp_daemon_engine",
                 },
