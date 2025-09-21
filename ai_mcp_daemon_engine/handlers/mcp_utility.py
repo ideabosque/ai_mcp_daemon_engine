@@ -881,7 +881,7 @@ def async_execute_tool_function(
             Config.logger.info(
                 f"Tool function {name} not completed yet. Waiting for result."
             )
-            time.sleep(1)
+            time.sleep(0.5)
 
     Config.logger.warning(f"Tool function {name} timed out after 5 seconds")
 
