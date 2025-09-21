@@ -880,7 +880,7 @@ def async_execute_tool_function(
 
             if time.time() - start_time > 15:
                 Config.logger.warning(
-                    f"Tool function {name} timed out after 60 seconds"
+                    f"Tool function {name} timed out after 15 seconds"
                 )
                 break
 
