@@ -855,7 +855,7 @@ def async_execute_tool_function(
     # Checks the status of the function call periodically and returns the result when complete
     # If timeout is reached, breaks the loop and returns a resource reference instead
     start_time = time.time()
-    while time.time() - start_time <= 10:
+    while time.time() - start_time <= 5:
         mcp_function_call = _check_existing_function_call(
             endpoint_id, mcp_function_call["mcpFunctionCallUuid"]
         )
@@ -883,7 +883,7 @@ def async_execute_tool_function(
             )
             time.sleep(1)
 
-    Config.logger.warning(f"Tool function {name} timed out after 15 seconds")
+    Config.logger.warning(f"Tool function {name} timed out after 5 seconds")
 
     return [
         EmbeddedResource(
