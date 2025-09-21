@@ -854,40 +854,40 @@ def async_execute_tool_function(
     # Poll for function completion with 60 second timeout
     # Checks the status of the function call periodically and returns the result when complete
     # If timeout is reached, breaks the loop and returns a resource reference instead
-    start_time = time.time()
-    while True:
-        mcp_function_call = _check_existing_function_call(
-            endpoint_id, mcp_function_call["mcpFunctionCallUuid"]
-        )
-        if mcp_function_call["status"] == "completed":
-            Config.logger.info(f"Tool function {name} completed. Returning result.")
-            return [TextContent(type="text", text=mcp_function_call["content"])]
-        elif mcp_function_call["status"] == "failed":
-            Config.logger.info(f"Tool function {name} failed. Returning error message.")
-            break
-        else:
-            # Update the status to "in_process" if the current status is "initial"
-            if mcp_function_call["status"] == "initial":
-                mcp_function_call = _insert_update_mcp_function_call(
-                    endpoint_id,
-                    **{
-                        "mcp_function_call_uuid": mcp_function_call[
-                            "mcpFunctionCallUuid"
-                        ],
-                        "status": "in_process",
-                    },
-                )
+    # start_time = time.time()
+    # while True:
+    #     mcp_function_call = _check_existing_function_call(
+    #         endpoint_id, mcp_function_call["mcpFunctionCallUuid"]
+    #     )
+    #     if mcp_function_call["status"] == "completed":
+    #         Config.logger.info(f"Tool function {name} completed. Returning result.")
+    #         return [TextContent(type="text", text=mcp_function_call["content"])]
+    #     elif mcp_function_call["status"] == "failed":
+    #         Config.logger.info(f"Tool function {name} failed. Returning error message.")
+    #         break
+    #     else:
+    #         # Update the status to "in_process" if the current status is "initial"
+    #         if mcp_function_call["status"] == "initial":
+    #             mcp_function_call = _insert_update_mcp_function_call(
+    #                 endpoint_id,
+    #                 **{
+    #                     "mcp_function_call_uuid": mcp_function_call[
+    #                         "mcpFunctionCallUuid"
+    #                     ],
+    #                     "status": "in_process",
+    #                 },
+    #             )
 
-            if time.time() - start_time > 15:
-                Config.logger.warning(
-                    f"Tool function {name} timed out after 15 seconds"
-                )
-                break
+    #         if time.time() - start_time > 15:
+    #             Config.logger.warning(
+    #                 f"Tool function {name} timed out after 15 seconds"
+    #             )
+    #             break
 
-            Config.logger.info(
-                f"Tool function {name} not completed yet. Waiting for result."
-            )
-            time.sleep(1)
+    #         Config.logger.info(
+    #             f"Tool function {name} not completed yet. Waiting for result."
+    #         )
+    #         time.sleep(1)
 
     return [
         EmbeddedResource(
