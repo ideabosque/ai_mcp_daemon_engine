@@ -12,6 +12,7 @@ from typing import Any, Dict
 import pendulum
 from graphene import ResolveInfo
 from pynamodb.attributes import (
+    BooleanAttribute,
     MapAttribute,
     NumberAttribute,
     UnicodeAttribute,
@@ -71,7 +72,7 @@ class MCPFunctionCallModel(BaseModel):
     name = UnicodeAttribute()
     mcp_type = UnicodeAttribute()
     arguments = MapAttribute()
-    content = UnicodeAttribute(null=True)
+    has_content = BooleanAttribute(default=False)
     status = UnicodeAttribute(default="initial")
     notes = UnicodeAttribute(null=True)
     time_spent = NumberAttribute(null=True)
@@ -113,11 +114,25 @@ def get_mcp_function_call_type(
     info: ResolveInfo, mcp_function_call: MCPFunctionCallModel
 ) -> MCPFunctionCallType:
     try:
-        mcp_function_call = mcp_function_call.__dict__["attribute_values"]
+        if mcp_function_call.has_content:
+            from ..handlers.config import Config
+
+            s3_key = f"mcp_content/{mcp_function_call.mcp_function_call_uuid}.json"
+            try:
+                response = Config.aws_s3.get_object(
+                    Bucket=Config.funct_bucket_name, Key=s3_key
+                )
+                content = response["Body"].read().decode("utf-8")
+            except Exception:
+                raise e
     except Exception as e:
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
+    mcp_function_call = mcp_function_call.__dict__["attribute_values"]
+    has_content = mcp_function_call.pop("has_content")
+    if has_content:
+        mcp_function_call["content"] = content
     return MCPFunctionCallType(
         **Utility.json_loads(Utility.json_dumps(mcp_function_call))
     )
@@ -201,7 +216,7 @@ def insert_update_mcp_function_call(
             "updated_at": pendulum.now("UTC"),
         }
         for key in [
-            "content",
+            "has_content",
             "status",
             "notes",
             "time_spent",
@@ -226,7 +241,7 @@ def insert_update_mcp_function_call(
         "name": MCPFunctionCallModel.name,
         "mcp_type": MCPFunctionCallModel.mcp_type,
         "arguments": MCPFunctionCallModel.arguments,
-        "content": MCPFunctionCallModel.content,
+        "has_content": MCPFunctionCallModel.has_content,
         "status": MCPFunctionCallModel.status,
         "notes": MCPFunctionCallModel.notes,
         "time_spent": MCPFunctionCallModel.time_spent,
