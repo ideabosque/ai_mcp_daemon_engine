@@ -76,7 +76,7 @@ def get_mcp_setting_type(
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPSettingType(**Utility.json_loads(Utility.json_dumps(mcp_setting)))
+    return MCPSettingType(**Utility.json_normalize(mcp_setting))
 
 
 def resolve_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPSettingType:

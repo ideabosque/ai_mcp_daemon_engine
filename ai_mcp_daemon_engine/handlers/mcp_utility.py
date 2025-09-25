@@ -192,9 +192,7 @@ def _insert_update_mcp_function_call(
                 "variables": {
                     "name": kwargs["name"],
                     "mcpType": kwargs["mcp_type"],
-                    "arguments": Utility.json_loads(
-                        Utility.json_dumps(kwargs["arguments"]), parser_number=False
-                    ),
+                    "arguments": Utility.json_normalize(kwargs["arguments"], parser_number=False),
                     "updatedBy": "mcp_daemon_engine",
                 },
             }
@@ -548,7 +546,7 @@ def execute_tool_function(
         tool_function = getattr(
             tool_class(
                 Config.logger,
-                **Utility.json_loads(Utility.json_dumps(module["setting"])),
+                **Utility.json_normalize(module["setting"]),
             ),
             module_link["function_name"],
         )
@@ -687,7 +685,7 @@ def execute_resource_function(
         resource_function = getattr(
             resource_class(
                 Config.logger,
-                **Utility.json_loads(Utility.json_dumps(module["setting"])),
+                **Utility.json_normalize(module["setting"]),
             ),
             module_link["function_name"],
         )
@@ -757,7 +755,7 @@ def execute_prompt_function(
         prompt_function = getattr(
             prompt_class(
                 Config.logger,
-                **Utility.json_loads(Utility.json_dumps(module["setting"])),
+                **Utility.json_normalize(module["setting"]),
             ),
             module_link["function_name"],
         )

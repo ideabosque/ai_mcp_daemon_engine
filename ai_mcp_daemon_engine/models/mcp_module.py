@@ -94,7 +94,7 @@ def get_mcp_module_type(
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPModuleType(**Utility.json_loads(Utility.json_dumps(mcp_module)))
+    return MCPModuleType(**Utility.json_normalize(mcp_module))
 
 
 def resolve_mcp_module(

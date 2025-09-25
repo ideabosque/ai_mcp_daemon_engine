@@ -134,7 +134,7 @@ def get_mcp_function_call_type(
     if has_content:
         mcp_function_call["content"] = content
     return MCPFunctionCallType(
-        **Utility.json_loads(Utility.json_dumps(mcp_function_call))
+        **Utility.json_normalize(mcp_function_call)
     )
 
 
