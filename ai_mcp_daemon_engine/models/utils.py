@@ -16,3 +16,17 @@ def _initialize_tables(logger: logging.Logger) -> None:
     create_mcp_function_call_table(logger)
     create_mcp_module_table(logger)
     create_mcp_setting_table(logger)
+
+
+def _get_cache_ttl():
+    """Lazy import to avoid circular dependency"""
+    from ..handlers.config import Config
+
+    return Config.get_cache_ttl()
+
+
+def _get_cache_name(module_type: str, model_name: str):
+    """Lazy import to avoid circular dependency"""
+    from ..handlers.config import Config
+
+    return Config.get_cache_name(module_type, model_name)

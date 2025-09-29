@@ -28,10 +28,11 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from ..handlers.config import Config
 from silvaengine_utility import Utility, method_cache
 
+from ..handlers.config import Config
 from ..types.mcp_module import MCPModuleListType, MCPModuleType
+from .utils import _get_cache_name, _get_cache_ttl
 
 
 class MCPPackgeIndex(LocalSecondaryIndex):
@@ -78,7 +79,10 @@ def create_mcp_module_table(logger: logging.Logger) -> bool:
     wait=wait_exponential(multiplier=1, max=60),
     stop=stop_after_attempt(5),
 )
-@method_cache(ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name('models', 'mcp_module'))
+@method_cache(
+    ttl=lambda: _get_cache_ttl(),
+    cache_name=lambda: _get_cache_name("models", "mcp_module"),
+)
 def get_mcp_module(endpoint_id: str, module_name: str) -> MCPModuleModel:
     return MCPModuleModel.get(endpoint_id, module_name)
 
@@ -87,9 +91,7 @@ def get_mcp_module_count(endpoint_id: str, module_name: str) -> int:
     return MCPModuleModel.count(endpoint_id, MCPModuleModel.module_name == module_name)
 
 
-def get_mcp_module_type(
-    info: ResolveInfo, mcp_module: MCPModuleModel
-) -> MCPModuleType:
+def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:
     try:
         mcp_module = mcp_module.__dict__["attribute_values"]
     except Exception as e:
@@ -99,9 +101,7 @@ def get_mcp_module_type(
     return MCPModuleType(**Utility.json_normalize(mcp_module))
 
 
-def resolve_mcp_module(
-    info: ResolveInfo, **kwargs: Dict[str, Any]
-) -> MCPModuleType:
+def resolve_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPModuleType:
     count = get_mcp_module_count(info.context["endpoint_id"], kwargs["module_name"])
     if count == 0:
         return None
