@@ -30,8 +30,8 @@ from silvaengine_dynamodb_base import (
 )
 from silvaengine_utility import Utility, method_cache
 
+from ..handlers.config import Config
 from ..types.mcp_function import MCPFunctionListType, MCPFunctionType
-from .utils import _get_cache_name, _get_cache_ttl
 
 
 class MCPTypeIndex(LocalSecondaryIndex):
@@ -85,8 +85,8 @@ def create_mcp_function_table(logger: logging.Logger) -> bool:
     stop=stop_after_attempt(5),
 )
 @method_cache(
-    ttl=lambda: _get_cache_ttl(),
-    cache_name=lambda: _get_cache_name("models", "mcp_function"),
+    ttl=Config.get_cache_ttl(),
+    cache_name=Config.get_cache_name("models", "mcp_function"),
 )
 def get_mcp_function(endpoint_id: str, name: str) -> MCPFunctionModel:
     return MCPFunctionModel.get(endpoint_id, name)

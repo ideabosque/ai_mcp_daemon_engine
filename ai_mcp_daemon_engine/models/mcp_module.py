@@ -32,7 +32,6 @@ from silvaengine_utility import Utility, method_cache
 
 from ..handlers.config import Config
 from ..types.mcp_module import MCPModuleListType, MCPModuleType
-from .utils import _get_cache_name, _get_cache_ttl
 
 
 class MCPPackgeIndex(LocalSecondaryIndex):
@@ -80,8 +79,7 @@ def create_mcp_module_table(logger: logging.Logger) -> bool:
     stop=stop_after_attempt(5),
 )
 @method_cache(
-    ttl=lambda: _get_cache_ttl(),
-    cache_name=lambda: _get_cache_name("models", "mcp_module"),
+    ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name("models", "mcp_module")
 )
 def get_mcp_module(endpoint_id: str, module_name: str) -> MCPModuleModel:
     return MCPModuleModel.get(endpoint_id, module_name)

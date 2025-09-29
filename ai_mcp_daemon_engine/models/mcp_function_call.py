@@ -32,7 +32,6 @@ from silvaengine_utility import Utility, method_cache
 
 from ..handlers.config import Config
 from ..types.mcp_function_call import MCPFunctionCallListType, MCPFunctionCallType
-from .utils import _get_cache_name, _get_cache_ttl
 
 
 class MCPTypeIndex(LocalSecondaryIndex):
@@ -100,8 +99,8 @@ def create_mcp_function_call_table(logger: logging.Logger) -> bool:
     stop=stop_after_attempt(5),
 )
 @method_cache(
-    ttl=lambda: _get_cache_ttl(),
-    cache_name=lambda: _get_cache_name("models", "mcp_function_call"),
+    ttl=Config.get_cache_ttl(),
+    cache_name=Config.get_cache_name("models", "mcp_function_call"),
 )
 def get_mcp_function_call(
     endpoint_id: str, mcp_function_call_uuid: str

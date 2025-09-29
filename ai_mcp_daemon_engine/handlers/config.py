@@ -18,7 +18,6 @@ from pydantic import AnyUrl
 from silvaengine_utility import Utility
 
 from ..models import utils
-from .mcp_core import MCPCore
 
 MCP_FUNCTION_LIST = """query mcpFunctionList(
         $pageNumber: Int, 
@@ -284,6 +283,8 @@ class Config:
             setting.get(k)
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
+            from .mcp_core import MCPCore
+
             cls.mcp_core = MCPCore(logger, **setting)
 
     @classmethod
