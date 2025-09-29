@@ -28,7 +28,8 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility
+from ..handlers.config import Config
+from silvaengine_utility import Utility, method_cache
 
 from ..types.mcp_function_call import MCPFunctionCallListType, MCPFunctionCallType
 
@@ -97,6 +98,7 @@ def create_mcp_function_call_table(logger: logging.Logger) -> bool:
     wait=wait_exponential(multiplier=1, max=60),
     stop=stop_after_attempt(5),
 )
+@method_cache(ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name('models', 'mcp_function_call'))
 def get_mcp_function_call(
     endpoint_id: str, mcp_function_call_uuid: str
 ) -> MCPFunctionCallModel:

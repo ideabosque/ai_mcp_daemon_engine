@@ -35,6 +35,14 @@ class InsertUpdateMcpFunction(Mutation):
         root: Any, info: Any, **kwargs: Dict[str, Any]
     ) -> "InsertUpdateMcpFunction":
         try:
+            from ..models.cache import purge_mcp_function_cascading_cache
+
+            purge_mcp_function_cascading_cache(
+                logger=info.context.get("logger"),
+                endpoint_id=info.context.get("endpoint_id"),
+                name=kwargs.get("name"),
+            )
+
             mcp_function = insert_update_mcp_function(info, **kwargs)
         except Exception as e:
             log = traceback.format_exc()
@@ -54,6 +62,14 @@ class DeleteMcpFunction(Mutation):
     @staticmethod
     def mutate(root: Any, info: Any, **kwargs: Dict[str, Any]) -> "DeleteMcpFunction":
         try:
+            from ..models.cache import purge_mcp_function_cascading_cache
+
+            purge_mcp_function_cascading_cache(
+                logger=info.context.get("logger"),
+                endpoint_id=info.context.get("endpoint_id"),
+                name=kwargs.get("name"),
+            )
+
             ok = delete_mcp_function(info, **kwargs)
         except Exception as e:
             log = traceback.format_exc()

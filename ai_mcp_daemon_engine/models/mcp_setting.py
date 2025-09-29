@@ -28,7 +28,8 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility
+from ..handlers.config import Config
+from silvaengine_utility import Utility, method_cache
 
 from ..types.mcp_setting import MCPSettingListType, MCPSettingType
 
@@ -59,6 +60,7 @@ def create_mcp_setting_table(logger: logging.Logger) -> bool:
     wait=wait_exponential(multiplier=1, max=60),
     stop=stop_after_attempt(5),
 )
+@method_cache(ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name('models', 'mcp_setting'))
 def get_mcp_setting(endpoint_id: str, setting_id: str) -> MCPSettingModel:
     return MCPSettingModel.get(endpoint_id, setting_id)
 

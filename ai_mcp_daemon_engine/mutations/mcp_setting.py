@@ -27,6 +27,14 @@ class InsertUpdateMcpSetting(Mutation):
         root: Any, info: Any, **kwargs: Dict[str, Any]
     ) -> "InsertUpdateMcpSetting":
         try:
+            from ..models.cache import purge_mcp_setting_cascading_cache
+
+            purge_mcp_setting_cascading_cache(
+                logger=info.context.get("logger"),
+                endpoint_id=info.context.get("endpoint_id"),
+                setting_id=kwargs.get("setting_id"),
+            )
+
             mcp_setting = insert_update_mcp_setting(info, **kwargs)
         except Exception as e:
             log = traceback.format_exc()
@@ -45,6 +53,14 @@ class DeleteMcpSetting(Mutation):
     @staticmethod
     def mutate(root: Any, info: Any, **kwargs: Dict[str, Any]) -> "DeleteMcpSetting":
         try:
+            from ..models.cache import purge_mcp_setting_cascading_cache
+
+            purge_mcp_setting_cascading_cache(
+                logger=info.context.get("logger"),
+                endpoint_id=info.context.get("endpoint_id"),
+                setting_id=kwargs.get("setting_id"),
+            )
+
             ok = delete_mcp_setting(info, **kwargs)
         except Exception as e:
             log = traceback.format_exc()
