@@ -206,6 +206,14 @@ def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) 
 def insert_update_mcp_function_call(
     info: ResolveInfo, **kwargs: Dict[str, Any]
 ) -> None:
+    from ..models.cache import purge_mcp_function_call_cascading_cache
+
+    purge_mcp_function_call_cascading_cache(
+        logger=info.context.get("logger"),
+        endpoint_id=info.context.get("endpoint_id"),
+        mcp_function_call_uuid=kwargs.get("mcp_function_call_uuid"),
+    )
+
     endpoint_id = kwargs.get("endpoint_id")
     mcp_function_call_uuid = kwargs.get("mcp_function_call_uuid", str(uuid.uuid4()))
 
@@ -266,5 +274,13 @@ def insert_update_mcp_function_call(
     model_funct=get_mcp_function_call,
 )
 def delete_mcp_function_call(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
+    from ..models.cache import purge_mcp_function_call_cascading_cache
+
+    purge_mcp_function_call_cascading_cache(
+        logger=info.context.get("logger"),
+        endpoint_id=info.context.get("endpoint_id"),
+        mcp_function_call_uuid=kwargs.get("mcp_function_call_uuid"),
+    )
+
     kwargs["entity"].delete()
     return True

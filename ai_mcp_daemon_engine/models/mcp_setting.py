@@ -130,6 +130,14 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
     type_funct=get_mcp_setting_type,
 )
 def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
+    from ..models.cache import purge_mcp_setting_cascading_cache
+
+    purge_mcp_setting_cascading_cache(
+        logger=info.context.get("logger"),
+        endpoint_id=info.context.get("endpoint_id"),
+        setting_id=kwargs.get("setting_id"),
+    )
+
     endpoint_id = kwargs.get("endpoint_id")
     setting_id = kwargs.get("setting_id")
 
@@ -174,5 +182,13 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
     model_funct=get_mcp_setting,
 )
 def delete_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
+    from ..models.cache import purge_mcp_setting_cascading_cache
+
+    purge_mcp_setting_cascading_cache(
+        logger=info.context.get("logger"),
+        endpoint_id=info.context.get("endpoint_id"),
+        setting_id=kwargs.get("setting_id"),
+    )
+
     kwargs["entity"].delete()
     return True

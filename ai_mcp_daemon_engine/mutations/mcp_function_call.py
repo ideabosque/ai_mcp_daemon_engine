@@ -36,14 +36,6 @@ class InsertUpdateMcpFunctionCall(Mutation):
         root: Any, info: Any, **kwargs: Dict[str, Any]
     ) -> "InsertUpdateMcpFunctionCall":
         try:
-            from ..models.cache import purge_mcp_function_call_cascading_cache
-
-            purge_mcp_function_call_cascading_cache(
-                logger=info.context.get("logger"),
-                endpoint_id=info.context.get("endpoint_id"),
-                mcp_function_call_uuid=kwargs.get("mcp_function_call_uuid"),
-            )
-
             mcp_function_call = insert_update_mcp_function_call(info, **kwargs)
         except Exception as e:
             log = traceback.format_exc()
@@ -65,14 +57,6 @@ class DeleteMcpFunctionCall(Mutation):
         root: Any, info: Any, **kwargs: Dict[str, Any]
     ) -> "DeleteMcpFunctionCall":
         try:
-            from ..models.cache import purge_mcp_function_call_cascading_cache
-
-            purge_mcp_function_call_cascading_cache(
-                logger=info.context.get("logger"),
-                endpoint_id=info.context.get("endpoint_id"),
-                mcp_function_call_uuid=kwargs.get("mcp_function_call_uuid"),
-            )
-
             ok = delete_mcp_function_call(info, **kwargs)
         except Exception as e:
             log = traceback.format_exc()
