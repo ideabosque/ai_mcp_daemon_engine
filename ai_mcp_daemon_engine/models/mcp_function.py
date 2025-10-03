@@ -96,6 +96,17 @@ def get_mcp_function_count(endpoint_id: str, name: str) -> int:
     return MCPFunctionModel.count(endpoint_id, MCPFunctionModel.name == name)
 
 
+def _purge_cache(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
+    # Use cascading cache purging for mcp functions
+    from ..models.cache import purge_mcp_function_cascading_cache
+
+    cache_result = purge_mcp_function_cascading_cache(
+        logger=info.context.get("logger"),
+        endpoint_id=kwargs.get("endpoint_id"),
+        name=kwargs.get("name"),
+    )
+
+
 def get_mcp_function_type(
     info: ResolveInfo, mcp_function: MCPFunctionModel
 ) -> MCPFunctionType:
@@ -170,13 +181,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
     type_funct=get_mcp_function_type,
 )
 def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    from ..models.cache import purge_mcp_function_cascading_cache
-
-    purge_mcp_function_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=info.context.get("endpoint_id"),
-        name=kwargs.get("name"),
-    )
+    _purge_cache(info, **kwargs)
 
     endpoint_id = kwargs.get("endpoint_id")
     name = kwargs.get("name")
@@ -242,13 +247,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
     model_funct=get_mcp_function,
 )
 def delete_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-    from ..models.cache import purge_mcp_function_cascading_cache
-
-    purge_mcp_function_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=info.context.get("endpoint_id"),
-        name=kwargs.get("name"),
-    )
+    _purge_cache(info, **kwargs)
 
     kwargs["entity"].delete()
     return True

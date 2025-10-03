@@ -64,12 +64,11 @@ def _get_cascading_cache_purger() -> CascadingCachePurger:
 def purge_entity_cascading_cache(
     logger: logging.Logger,
     entity_type: str,
-    *,
     context_keys: Optional[Dict[str, Any]] = None,
     entity_keys: Optional[Dict[str, Any]] = None,
     cascade_depth: int = 3,
 ) -> Dict[str, Any]:
-    """Universal entry point for cascading cache purging."""
+    """Universal function to purge entity cache with cascading child cache support."""
     purger = _get_cascading_cache_purger()
     return purger.purge_entity_cascading_cache(
         logger,
@@ -80,23 +79,55 @@ def purge_entity_cascading_cache(
     )
 
 
+# ===============================
+# UNIVERSAL CASCADING CACHE PURGING WRAPPERS
+# ===============================
+
+
 def purge_mcp_module_cascading_cache(
     logger: logging.Logger,
     endpoint_id: str,
     module_name: Optional[str] = None,
     cascade_depth: int = 3,
 ) -> Dict[str, Any]:
-    entity_keys = {"module_name": module_name} if module_name else None
+    """
+    MCP module-specific wrapper for the universal cache purging function.
+
+    Args:
+        endpoint_id: The endpoint ID
+        module_name: Module name (for both individual and child cache clearing)
+        cascade_depth: How many levels deep to cascade (default: 3)
+        logger: logging.Logger instance
+
+    Returns:
+        Dict with comprehensive purge operation results
+    """
+    entity_keys = {}
+    if module_name:
+        entity_keys["module_name"] = module_name
+
     result = purge_entity_cascading_cache(
         logger,
         entity_type="mcp_module",
         context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
-        entity_keys=entity_keys,
+        entity_keys=entity_keys if entity_keys else None,
         cascade_depth=cascade_depth,
     )
-    if module_name:
-        result.setdefault("entity_keys", {})["module_name"] = module_name
-    return result
+
+    # Transform result for backward compatibility
+    mcp_module_result = {
+        "module_name": module_name,
+        "individual_mcp_module_cache_cleared": result["individual_cache_cleared"],
+        "mcp_module_list_cache_cleared": result["list_cache_cleared"],
+        "cascaded_levels": result["cascaded_levels"],
+        "total_child_caches_cleared": result["total_child_caches_cleared"],
+        "total_individual_children_cleared": result.get(
+            "total_individual_children_cleared", 0
+        ),
+        "errors": result["errors"],
+    }
+
+    return mcp_module_result
 
 
 def purge_mcp_function_cascading_cache(
@@ -105,17 +136,44 @@ def purge_mcp_function_cascading_cache(
     name: Optional[str] = None,
     cascade_depth: int = 3,
 ) -> Dict[str, Any]:
-    entity_keys = {"name": name} if name else None
+    """
+    MCP function-specific wrapper for the universal cache purging function.
+
+    Args:
+        endpoint_id: The endpoint ID
+        name: Function name (for both individual and child cache clearing)
+        cascade_depth: How many levels deep to cascade (default: 3)
+        logger: logging.Logger instance
+
+    Returns:
+        Dict with comprehensive purge operation results
+    """
+    entity_keys = {}
+    if name:
+        entity_keys["name"] = name
+
     result = purge_entity_cascading_cache(
         logger,
         entity_type="mcp_function",
         context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
-        entity_keys=entity_keys,
+        entity_keys=entity_keys if entity_keys else None,
         cascade_depth=cascade_depth,
     )
-    if name:
-        result.setdefault("entity_keys", {})["name"] = name
-    return result
+
+    # Transform result for backward compatibility
+    mcp_function_result = {
+        "name": name,
+        "individual_mcp_function_cache_cleared": result["individual_cache_cleared"],
+        "mcp_function_list_cache_cleared": result["list_cache_cleared"],
+        "cascaded_levels": result["cascaded_levels"],
+        "total_child_caches_cleared": result["total_child_caches_cleared"],
+        "total_individual_children_cleared": result.get(
+            "total_individual_children_cleared", 0
+        ),
+        "errors": result["errors"],
+    }
+
+    return mcp_function_result
 
 
 def purge_mcp_function_call_cascading_cache(
@@ -124,23 +182,44 @@ def purge_mcp_function_call_cascading_cache(
     mcp_function_call_uuid: Optional[str] = None,
     cascade_depth: int = 3,
 ) -> Dict[str, Any]:
-    entity_keys = (
-        {"mcp_function_call_uuid": mcp_function_call_uuid}
-        if mcp_function_call_uuid
-        else None
-    )
+    """
+    MCP function call-specific wrapper for the universal cache purging function.
+
+    Args:
+        endpoint_id: The endpoint ID
+        mcp_function_call_uuid: Function call UUID (for both individual and child cache clearing)
+        cascade_depth: How many levels deep to cascade (default: 3)
+        logger: logging.Logger instance
+
+    Returns:
+        Dict with comprehensive purge operation results
+    """
+    entity_keys = {}
+    if mcp_function_call_uuid:
+        entity_keys["mcp_function_call_uuid"] = mcp_function_call_uuid
+
     result = purge_entity_cascading_cache(
         logger,
         entity_type="mcp_function_call",
         context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
-        entity_keys=entity_keys,
+        entity_keys=entity_keys if entity_keys else None,
         cascade_depth=cascade_depth,
     )
-    if mcp_function_call_uuid:
-        result.setdefault("entity_keys", {})[
-            "mcp_function_call_uuid"
-        ] = mcp_function_call_uuid
-    return result
+
+    # Transform result for backward compatibility
+    mcp_function_call_result = {
+        "mcp_function_call_uuid": mcp_function_call_uuid,
+        "individual_mcp_function_call_cache_cleared": result["individual_cache_cleared"],
+        "mcp_function_call_list_cache_cleared": result["list_cache_cleared"],
+        "cascaded_levels": result["cascaded_levels"],
+        "total_child_caches_cleared": result["total_child_caches_cleared"],
+        "total_individual_children_cleared": result.get(
+            "total_individual_children_cleared", 0
+        ),
+        "errors": result["errors"],
+    }
+
+    return mcp_function_call_result
 
 
 def purge_mcp_setting_cascading_cache(
@@ -149,17 +228,44 @@ def purge_mcp_setting_cascading_cache(
     setting_id: Optional[str] = None,
     cascade_depth: int = 3,
 ) -> Dict[str, Any]:
-    entity_keys = {"setting_id": setting_id} if setting_id else None
+    """
+    MCP setting-specific wrapper for the universal cache purging function.
+
+    Args:
+        endpoint_id: The endpoint ID
+        setting_id: Setting ID (for both individual and child cache clearing)
+        cascade_depth: How many levels deep to cascade (default: 3)
+        logger: logging.Logger instance
+
+    Returns:
+        Dict with comprehensive purge operation results
+    """
+    entity_keys = {}
+    if setting_id:
+        entity_keys["setting_id"] = setting_id
+
     result = purge_entity_cascading_cache(
         logger,
         entity_type="mcp_setting",
         context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
-        entity_keys=entity_keys,
+        entity_keys=entity_keys if entity_keys else None,
         cascade_depth=cascade_depth,
     )
-    if setting_id:
-        result.setdefault("entity_keys", {})["setting_id"] = setting_id
-    return result
+
+    # Transform result for backward compatibility
+    mcp_setting_result = {
+        "setting_id": setting_id,
+        "individual_mcp_setting_cache_cleared": result["individual_cache_cleared"],
+        "mcp_setting_list_cache_cleared": result["list_cache_cleared"],
+        "cascaded_levels": result["cascaded_levels"],
+        "total_child_caches_cleared": result["total_child_caches_cleared"],
+        "total_individual_children_cleared": result.get(
+            "total_individual_children_cleared", 0
+        ),
+        "errors": result["errors"],
+    }
+
+    return mcp_setting_result
 
 
 __all__ = [

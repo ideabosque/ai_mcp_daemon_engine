@@ -89,6 +89,26 @@ def get_mcp_module_count(endpoint_id: str, module_name: str) -> int:
     return MCPModuleModel.count(endpoint_id, MCPModuleModel.module_name == module_name)
 
 
+def _purge_cache(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
+    # Use cascading cache purging for mcp modules
+    from ..models.cache import purge_mcp_module_cascading_cache, _extract_module_setting_ids, purge_mcp_setting_cascading_cache
+
+    cache_result = purge_mcp_module_cascading_cache(
+        logger=info.context.get("logger"),
+        endpoint_id=kwargs.get("endpoint_id"),
+        module_name=kwargs.get("module_name"),
+    )
+
+    module = resolve_mcp_module(info, **kwargs)
+    if module:
+        setting_ids = _extract_module_setting_ids(module.classes)
+        for setting_id in setting_ids:
+            purge_mcp_setting_cascading_cache(
+                logger=info.context.get("logger"),
+                endpoint_id=kwargs.get("endpoint_id"),
+                setting_id=setting_id,
+            )
+
 def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:
     try:
         mcp_module = mcp_module.__dict__["attribute_values"]
@@ -150,13 +170,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     type_funct=get_mcp_module_type,
 )
 def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    from ..models.cache import purge_mcp_module_cascading_cache
-
-    purge_mcp_module_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=info.context.get("endpoint_id"),
-        module_name=kwargs.get("module_name"),
-    )
+    _purge_cache(info, **kwargs)
 
     endpoint_id = kwargs.get("endpoint_id")
     module_name = kwargs.get("module_name")
@@ -210,13 +224,7 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     model_funct=get_mcp_module,
 )
 def delete_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-    from ..models.cache import purge_mcp_module_cascading_cache
-
-    purge_mcp_module_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=info.context.get("endpoint_id"),
-        module_name=kwargs.get("module_name"),
-    )
+    _purge_cache(info, **kwargs)
 
     kwargs["entity"].delete()
     return True
