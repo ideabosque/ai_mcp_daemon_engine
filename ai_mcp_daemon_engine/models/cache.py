@@ -13,8 +13,6 @@ from silvaengine_dynamodb_base.cache_utils import (
 )
 
 
-
-
 def _extract_module_setting_ids(raw_classes: Any) -> Set[str]:
     setting_ids: Set[str] = set()
     if not raw_classes:
@@ -47,6 +45,7 @@ def _extract_module_setting_ids(raw_classes: Any) -> Set[str]:
             setting_ids.add(setting_id)
 
     return setting_ids
+
 
 @lru_cache(maxsize=1)
 def _get_cascading_cache_purger() -> CascadingCachePurger:
@@ -209,7 +208,9 @@ def purge_mcp_function_call_cascading_cache(
     # Transform result for backward compatibility
     mcp_function_call_result = {
         "mcp_function_call_uuid": mcp_function_call_uuid,
-        "individual_mcp_function_call_cache_cleared": result["individual_cache_cleared"],
+        "individual_mcp_function_call_cache_cleared": result[
+            "individual_cache_cleared"
+        ],
         "mcp_function_call_list_cache_cleared": result["list_cache_cleared"],
         "cascaded_levels": result["cascaded_levels"],
         "total_child_caches_cleared": result["total_child_caches_cleared"],
