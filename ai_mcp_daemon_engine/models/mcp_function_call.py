@@ -84,6 +84,7 @@ class MCPFunctionCallModel(BaseModel):
     mcp_type_index = MCPTypeIndex()
     name_index = NameIndex()
 
+
 def purge_cache():
     def actual_decorator(original_function):
         @functools.wraps(original_function)
@@ -142,9 +143,6 @@ def get_mcp_function_call_count(endpoint_id: str, mcp_function_call_uuid: str) -
         endpoint_id,
         MCPFunctionCallModel.mcp_function_call_uuid == mcp_function_call_uuid,
     )
-
-
-
 
 
 def get_mcp_function_call_type(

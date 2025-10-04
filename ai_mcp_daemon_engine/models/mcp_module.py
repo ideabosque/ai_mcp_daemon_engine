@@ -64,6 +64,7 @@ class MCPModuleModel(BaseModel):
     updated_at = UTCDateTimeAttribute()
     mcp_package_index = MCPPackgeIndex()
 
+
 def purge_cache():
     def actual_decorator(original_function):
         @functools.wraps(original_function)
@@ -111,7 +112,6 @@ def purge_cache():
     return actual_decorator
 
 
-
 def create_mcp_module_table(logger: logging.Logger) -> bool:
     """Create the MCP Module table if it doesn't exist."""
     if not MCPModuleModel.exists():
@@ -135,7 +135,6 @@ def get_mcp_module(endpoint_id: str, module_name: str) -> MCPModuleModel:
 
 def get_mcp_module_count(endpoint_id: str, module_name: str) -> int:
     return MCPModuleModel.count(endpoint_id, MCPModuleModel.module_name == module_name)
-
 
 
 def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:

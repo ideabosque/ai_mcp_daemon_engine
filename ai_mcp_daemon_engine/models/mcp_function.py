@@ -70,6 +70,7 @@ class MCPFunctionModel(BaseModel):
     updated_at = UTCDateTimeAttribute()
     mcp_type_index = MCPTypeIndex()
 
+
 def purge_cache():
     def actual_decorator(original_function):
         @functools.wraps(original_function)
@@ -99,7 +100,6 @@ def purge_cache():
     return actual_decorator
 
 
-
 def create_mcp_function_table(logger: logging.Logger) -> bool:
     """Create the MCP Function table if it doesn't exist."""
     if not MCPFunctionModel.exists():
@@ -124,8 +124,6 @@ def get_mcp_function(endpoint_id: str, name: str) -> MCPFunctionModel:
 
 def get_mcp_function_count(endpoint_id: str, name: str) -> int:
     return MCPFunctionModel.count(endpoint_id, MCPFunctionModel.name == name)
-
-
 
 
 def get_mcp_function_type(
