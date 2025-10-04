@@ -53,13 +53,21 @@ def purge_cache():
         def wrapper_function(*args, **kwargs):
             try:
                 # Use cascading cache purging for mcp settings
-                from ..models.cache import purge_mcp_setting_cascading_cache
+                from ..models.cache import purge_entity_cascading_cache
 
-                cache_result = purge_mcp_setting_cascading_cache(
-                    logger=args[0].context.get("logger"),
-                    endpoint_id=args[0].context.get("endpoint_id")
-                    or kwargs.get("endpoint_id"),
-                    setting_id=kwargs.get("setting_id"),
+                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
+                    "endpoint_id"
+                )
+                entity_keys = {}
+                if kwargs.get("setting_id"):
+                    entity_keys["setting_id"] = kwargs.get("setting_id")
+
+                result = purge_entity_cascading_cache(
+                    args[0].context.get("logger"),
+                    entity_type="mcp_setting",
+                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    entity_keys=entity_keys if entity_keys else None,
+                    cascade_depth=3,
                 )
 
                 ## Original function.

@@ -73,27 +73,38 @@ def purge_cache():
                 # Use cascading cache purging for mcp modules
                 from ..models.cache import (
                     _extract_module_setting_ids,
-                    purge_mcp_module_cascading_cache,
-                    purge_mcp_setting_cascading_cache,
+                    purge_entity_cascading_cache,
                 )
 
-                cache_result = purge_mcp_module_cascading_cache(
-                    logger=args[0].context.get("logger"),
-                    endpoint_id=args[0].context.get("endpoint_id")
-                    or kwargs.get("endpoint_id"),
-                    module_name=kwargs.get("module_name"),
+                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
+                    "endpoint_id"
+                )
+                entity_keys = {}
+                if kwargs.get("module_name"):
+                    entity_keys["module_name"] = kwargs.get("module_name")
+
+                result = purge_entity_cascading_cache(
+                    args[0].context.get("logger"),
+                    entity_type="mcp_module",
+                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    entity_keys=entity_keys if entity_keys else None,
+                    cascade_depth=3,
                 )
 
+                # Purge setting caches if module has classes with setting_ids
                 try:
                     module = resolve_mcp_module(args[0], **kwargs)
                     if module:
                         setting_ids = _extract_module_setting_ids(module.classes)
                         for setting_id in setting_ids:
-                            purge_mcp_setting_cascading_cache(
-                                logger=args[0].context.get("logger"),
-                                endpoint_id=args[0].context.get("endpoint_id")
-                                or kwargs.get("endpoint_id"),
-                                setting_id=setting_id,
+                            purge_entity_cascading_cache(
+                                args[0].context.get("logger"),
+                                entity_type="mcp_setting",
+                                context_keys={"endpoint_id": endpoint_id}
+                                if endpoint_id
+                                else None,
+                                entity_keys={"setting_id": setting_id},
+                                cascade_depth=3,
                             )
                 except Exception as e:
                     pass
