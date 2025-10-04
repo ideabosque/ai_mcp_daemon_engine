@@ -4,6 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
+import functools
 import logging
 import traceback
 import uuid
@@ -83,6 +84,34 @@ class MCPFunctionCallModel(BaseModel):
     mcp_type_index = MCPTypeIndex()
     name_index = NameIndex()
 
+def purge_cache():
+    def actual_decorator(original_function):
+        @functools.wraps(original_function)
+        def wrapper_function(*args, **kwargs):
+            try:
+                # Use cascading cache purging for mcp function calls
+                from ..models.cache import purge_mcp_function_call_cascading_cache
+
+                cache_result = purge_mcp_function_call_cascading_cache(
+                    logger=args[0].context.get("logger"),
+                    endpoint_id=args[0].context.get("endpoint_id")
+                    or kwargs.get("endpoint_id"),
+                    mcp_function_call_uuid=kwargs.get("mcp_function_call_uuid"),
+                )
+
+                ## Original function.
+                result = original_function(*args, **kwargs)
+
+                return result
+            except Exception as e:
+                log = traceback.format_exc()
+                args[0].context.get("logger").error(log)
+                raise e
+
+        return wrapper_function
+
+    return actual_decorator
+
 
 def create_mcp_function_call_table(logger: logging.Logger) -> bool:
     """Create the MCP Function Call table if it doesn't exist."""
@@ -115,15 +144,7 @@ def get_mcp_function_call_count(endpoint_id: str, mcp_function_call_uuid: str) -
     )
 
 
-def _purge_cache(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    # Use cascading cache purging for mcp function calls
-    from ..models.cache import purge_mcp_function_call_cascading_cache
 
-    cache_result = purge_mcp_function_call_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=kwargs.get("endpoint_id"),
-        mcp_function_call_uuid=kwargs.get("mcp_function_call_uuid"),
-    )
 
 
 def get_mcp_function_call_type(
@@ -205,6 +226,7 @@ def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) 
     return inquiry_funct, count_funct, args
 
 
+@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -217,7 +239,6 @@ def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) 
 def insert_update_mcp_function_call(
     info: ResolveInfo, **kwargs: Dict[str, Any]
 ) -> None:
-    _purge_cache(info, **kwargs)
 
     endpoint_id = kwargs.get("endpoint_id")
     mcp_function_call_uuid = kwargs.get("mcp_function_call_uuid", str(uuid.uuid4()))
@@ -271,6 +292,7 @@ def insert_update_mcp_function_call(
     return
 
 
+@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -279,7 +301,6 @@ def insert_update_mcp_function_call(
     model_funct=get_mcp_function_call,
 )
 def delete_mcp_function_call(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-    _purge_cache(info, **kwargs)
 
     kwargs["entity"].delete()
     return True

@@ -4,6 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
+import functools
 import logging
 import traceback
 import uuid
@@ -63,6 +64,53 @@ class MCPModuleModel(BaseModel):
     updated_at = UTCDateTimeAttribute()
     mcp_package_index = MCPPackgeIndex()
 
+def purge_cache():
+    def actual_decorator(original_function):
+        @functools.wraps(original_function)
+        def wrapper_function(*args, **kwargs):
+            try:
+                # Use cascading cache purging for mcp modules
+                from ..models.cache import (
+                    _extract_module_setting_ids,
+                    purge_mcp_module_cascading_cache,
+                    purge_mcp_setting_cascading_cache,
+                )
+
+                cache_result = purge_mcp_module_cascading_cache(
+                    logger=args[0].context.get("logger"),
+                    endpoint_id=args[0].context.get("endpoint_id")
+                    or kwargs.get("endpoint_id"),
+                    module_name=kwargs.get("module_name"),
+                )
+
+                try:
+                    module = resolve_mcp_module(args[0], **kwargs)
+                    if module:
+                        setting_ids = _extract_module_setting_ids(module.classes)
+                        for setting_id in setting_ids:
+                            purge_mcp_setting_cascading_cache(
+                                logger=args[0].context.get("logger"),
+                                endpoint_id=args[0].context.get("endpoint_id")
+                                or kwargs.get("endpoint_id"),
+                                setting_id=setting_id,
+                            )
+                except Exception as e:
+                    pass
+
+                ## Original function.
+                result = original_function(*args, **kwargs)
+
+                return result
+            except Exception as e:
+                log = traceback.format_exc()
+                args[0].context.get("logger").error(log)
+                raise e
+
+        return wrapper_function
+
+    return actual_decorator
+
+
 
 def create_mcp_module_table(logger: logging.Logger) -> bool:
     """Create the MCP Module table if it doesn't exist."""
@@ -89,25 +137,6 @@ def get_mcp_module_count(endpoint_id: str, module_name: str) -> int:
     return MCPModuleModel.count(endpoint_id, MCPModuleModel.module_name == module_name)
 
 
-def _purge_cache(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    # Use cascading cache purging for mcp modules
-    from ..models.cache import purge_mcp_module_cascading_cache, _extract_module_setting_ids, purge_mcp_setting_cascading_cache
-
-    cache_result = purge_mcp_module_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=kwargs.get("endpoint_id"),
-        module_name=kwargs.get("module_name"),
-    )
-
-    module = resolve_mcp_module(info, **kwargs)
-    if module:
-        setting_ids = _extract_module_setting_ids(module.classes)
-        for setting_id in setting_ids:
-            purge_mcp_setting_cascading_cache(
-                logger=info.context.get("logger"),
-                endpoint_id=kwargs.get("endpoint_id"),
-                setting_id=setting_id,
-            )
 
 def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:
     try:
@@ -159,6 +188,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     return inquiry_funct, count_funct, args
 
 
+@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -170,7 +200,6 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     type_funct=get_mcp_module_type,
 )
 def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    _purge_cache(info, **kwargs)
 
     endpoint_id = kwargs.get("endpoint_id")
     module_name = kwargs.get("module_name")
@@ -216,6 +245,7 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     return
 
 
+@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -224,7 +254,6 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     model_funct=get_mcp_module,
 )
 def delete_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-    _purge_cache(info, **kwargs)
 
     kwargs["entity"].delete()
     return True

@@ -4,6 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
+import functools
 import logging
 import traceback
 import uuid
@@ -46,6 +47,35 @@ class MCPSettingModel(BaseModel):
     updated_at = UTCDateTimeAttribute()
 
 
+def purge_cache():
+    def actual_decorator(original_function):
+        @functools.wraps(original_function)
+        def wrapper_function(*args, **kwargs):
+            try:
+                # Use cascading cache purging for mcp settings
+                from ..models.cache import purge_mcp_setting_cascading_cache
+
+                cache_result = purge_mcp_setting_cascading_cache(
+                    logger=args[0].context.get("logger"),
+                    endpoint_id=args[0].context.get("endpoint_id")
+                    or kwargs.get("endpoint_id"),
+                    setting_id=kwargs.get("setting_id"),
+                )
+
+                ## Original function.
+                result = original_function(*args, **kwargs)
+
+                return result
+            except Exception as e:
+                log = traceback.format_exc()
+                args[0].context.get("logger").error(log)
+                raise e
+
+        return wrapper_function
+
+    return actual_decorator
+
+
 def create_mcp_setting_table(logger: logging.Logger) -> bool:
     """Create the MCP Setting table if it doesn't exist."""
     if not MCPSettingModel.exists():
@@ -70,17 +100,6 @@ def get_mcp_setting(endpoint_id: str, setting_id: str) -> MCPSettingModel:
 
 def get_mcp_setting_count(endpoint_id: str, setting_id: str) -> int:
     return MCPSettingModel.count(endpoint_id, MCPSettingModel.setting_id == setting_id)
-
-
-def _purge_cache(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    # Use cascading cache purging for mcp settings
-    from ..models.cache import purge_mcp_setting_cascading_cache
-
-    cache_result = purge_mcp_setting_cascading_cache(
-        logger=info.context.get("logger"),
-        endpoint_id=kwargs.get("endpoint_id"),
-        setting_id=kwargs.get("setting_id"),
-    )
 
 
 def get_mcp_setting_type(
@@ -130,6 +149,7 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
     return inquiry_funct, count_funct, args
 
 
+@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -141,7 +161,6 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
     type_funct=get_mcp_setting_type,
 )
 def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-    _purge_cache(info, **kwargs)
 
     endpoint_id = kwargs.get("endpoint_id")
     setting_id = kwargs.get("setting_id")
@@ -179,6 +198,7 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
     return
 
 
+@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -187,7 +207,6 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
     model_funct=get_mcp_setting,
 )
 def delete_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-    _purge_cache(info, **kwargs)
 
     kwargs["entity"].delete()
     return True
