@@ -526,6 +526,9 @@ def execute_tool_function(
             {},
         )
 
+        if arguments is None:
+            arguments = {}
+
         # Validate arguments and set defaults using the tool schema
         _validate_and_set_defaults(tool, arguments)
 
