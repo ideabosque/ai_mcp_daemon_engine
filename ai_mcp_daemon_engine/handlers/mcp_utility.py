@@ -556,17 +556,12 @@ def execute_tool_function(
             module["class_name"],
             source=module.get("source"),
         )
+        tool = tool_class(Config.logger, **Utility.json_normalize(module["setting"]))
 
-        tool_function = getattr(
-            tool_class(
-                Config.logger,
-                **Utility.json_normalize(module["setting"]),
-            ),
-            module_link["function_name"],
-        )
+        if hasattr(tool, "endpoint_id"):
+            tool.endpoint_id = endpoint_id
 
-        if "endpoint_id" not in arguments:
-            arguments["endpoint_id"] = endpoint_id
+        tool_function = getattr(tool, module_link["function_name"])
 
         if module_link.get("is_async", False):
             if Config.aws_lambda:
