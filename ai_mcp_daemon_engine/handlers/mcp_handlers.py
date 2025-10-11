@@ -39,14 +39,29 @@ def load_mcp_configuration_into_models(
         from ..models.mcp_function import insert_update_mcp_function
         from ..models.mcp_module import insert_update_mcp_module
         from ..models.mcp_setting import insert_update_mcp_setting
+        from .mcp_utility import get_mcp_configuration_by_module
 
-        mcp_configuration = kwargs["mcp_configuration"]
-        updated_by = kwargs["updated_by"]
         endpoint_id = info.context["endpoint_id"]
-
         info.context["logger"].info(
             f"Loading MCP configuration for endpoint: {endpoint_id}"
         )
+        updated_by = kwargs["updated_by"]
+
+        mcp_configuration = None
+        if "module_name" in kwargs:
+            mcp_configuration = get_mcp_configuration_by_module(
+                kwargs.get("package_name"),
+                kwargs["module_name"],
+                source=kwargs.get("source"),
+            )
+            info.context["logger"].info(
+                f"Loading MCP configuration for package: {kwargs.get('package_name', '')}, module: {kwargs['module_name']}"
+            )
+        else:
+            if "mcp_configuration" in kwargs:
+                mcp_configuration = kwargs["mcp_configuration"]
+            else:
+                raise Exception("No MCP configuration provided")
 
         stats = {"tools": 0, "resources": 0, "prompts": 0, "modules": 0, "settings": 0}
 
@@ -155,9 +170,25 @@ def load_mcp_configuration_into_models(
                 "setting": {},
                 "updated_by": updated_by,
             }
+
+            # Aggregate all module settings
             for module in mcp_configuration["modules"]:
-                setting = dict(setting_insert_data["setting"], **module.get("setting", {}))
-                setting_insert_data["setting"] = setting
+                setting_insert_data["setting"] = dict(
+                    setting_insert_data["setting"], **module.get("setting", {})
+                )
+
+            # Apply Config.setting overrides (after aggregating all module settings)
+            from .config import Config
+
+            for k, v in Config.setting.items():
+                if k in setting_insert_data["setting"].keys():
+                    setting_insert_data["setting"][k] = v
+
+            # Apply variables overrides (highest priority)
+            if "variables" in kwargs:
+                for k, v in kwargs["variables"].items():
+                    if k in setting_insert_data["setting"].keys():
+                        setting_insert_data["setting"][k] = v
 
             # Create the shared setting and get the setting_id from the returned object
             mcp_setting = insert_update_mcp_setting(info, **setting_insert_data)

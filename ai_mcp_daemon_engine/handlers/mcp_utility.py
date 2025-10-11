@@ -192,7 +192,9 @@ def _insert_update_mcp_function_call(
                 "variables": {
                     "name": kwargs["name"],
                     "mcpType": kwargs["mcp_type"],
-                    "arguments": Utility.json_normalize(kwargs["arguments"], parser_number=False),
+                    "arguments": Utility.json_normalize(
+                        kwargs["arguments"], parser_number=False
+                    ),
                     "updatedBy": "mcp_daemon_engine",
                 },
             }
@@ -398,12 +400,11 @@ def _download_and_extract_package(package_name: str) -> None:
     Config.logger.info(f"Extracted module to {Config.funct_extract_path}")
 
 
-def _get_class(
-    package_name: str, module_name: str, class_name: str, source: str = None
-) -> Optional[type]:
+def _get_module(package_name: str, module_name: str, source: str = None) -> type:
     try:
+        """Get the module class from the package."""
         if source is None:
-            return getattr(__import__(module_name), class_name)
+            return getattr(__import__(module_name), module_name)
 
         # Check if the module exists
         if not _module_exists(module_name):
@@ -417,6 +418,19 @@ def _get_class(
 
         # Import the module and get the class
         module = __import__(module_name)
+        return module
+    except Exception as e:
+        log = traceback.format_exc()
+        Config.logger.error(log)
+        raise e
+
+
+def _get_class(
+    package_name: str, module_name: str, class_name: str, source: str = None
+) -> Optional[type]:
+    try:
+        # Import the module and get the class
+        module = _get_module(package_name, module_name, source=source)
         return getattr(module, class_name)
     except Exception as e:
         log = traceback.format_exc()
@@ -596,6 +610,20 @@ def execute_tool_function(
             raise Exception(
                 f"Invalid return type {return_type}. Supported types: text, image, resource"
             )
+
+    except Exception as e:
+        log = traceback.format_exc()
+        Config.logger.error(log)
+        raise e
+
+
+def get_mcp_configuration_by_module(
+    package_name: str, module_name: str, source: str = None
+) -> Dict[str, Any]:
+    """Get MCP configuration by module."""
+    try:
+        module = _get_module(package_name, module_name, source=source)
+        return getattr(module, "MCP_CONFIGURATION")
 
     except Exception as e:
         log = traceback.format_exc()

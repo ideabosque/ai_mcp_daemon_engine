@@ -18,7 +18,11 @@ class LoadMcpConfiguration(Mutation):
     message = String()
 
     class Arguments:
-        mcp_configuration = JSON(required=True)
+        package_name = String(required=False)
+        module_name = String(required=False)
+        source = String(required=False)
+        mcp_configuration = JSON(required=False)
+        variables = JSON(required=False)
         updated_by = String(required=True)
 
     @staticmethod
