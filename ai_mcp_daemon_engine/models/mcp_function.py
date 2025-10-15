@@ -4,6 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
+import functools
 import logging
 import traceback
 import uuid
@@ -12,6 +13,7 @@ from typing import Any, Dict
 import pendulum
 from graphene import ResolveInfo
 from pynamodb.attributes import (
+    BooleanAttribute,
     MapAttribute,
     NumberAttribute,
     UnicodeAttribute,
@@ -27,8 +29,9 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility
+from silvaengine_utility import Utility, method_cache
 
+from ..handlers.config import Config
 from ..types.mcp_function import MCPFunctionListType, MCPFunctionType
 
 
@@ -61,10 +64,48 @@ class MCPFunctionModel(BaseModel):
     class_name = UnicodeAttribute(null=True)
     function_name = UnicodeAttribute(null=True)
     return_type = UnicodeAttribute(null=True)
+    is_async = BooleanAttribute(null=True)
     updated_by = UnicodeAttribute()
     created_at = UTCDateTimeAttribute()
     updated_at = UTCDateTimeAttribute()
     mcp_type_index = MCPTypeIndex()
+
+
+def purge_cache():
+    def actual_decorator(original_function):
+        @functools.wraps(original_function)
+        def wrapper_function(*args, **kwargs):
+            try:
+                # Use cascading cache purging for mcp functions
+                from ..models.cache import purge_entity_cascading_cache
+
+                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
+                    "endpoint_id"
+                )
+                entity_keys = {}
+                if kwargs.get("name"):
+                    entity_keys["name"] = kwargs.get("name")
+
+                result = purge_entity_cascading_cache(
+                    args[0].context.get("logger"),
+                    entity_type="mcp_function",
+                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    entity_keys=entity_keys if entity_keys else None,
+                    cascade_depth=3,
+                )
+
+                ## Original function.
+                result = original_function(*args, **kwargs)
+
+                return result
+            except Exception as e:
+                log = traceback.format_exc()
+                args[0].context.get("logger").error(log)
+                raise e
+
+        return wrapper_function
+
+    return actual_decorator
 
 
 def create_mcp_function_table(logger: logging.Logger) -> bool:
@@ -80,6 +121,10 @@ def create_mcp_function_table(logger: logging.Logger) -> bool:
     reraise=True,
     wait=wait_exponential(multiplier=1, max=60),
     stop=stop_after_attempt(5),
+)
+@method_cache(
+    ttl=Config.get_cache_ttl(),
+    cache_name=Config.get_cache_name("models", "mcp_function"),
 )
 def get_mcp_function(endpoint_id: str, name: str) -> MCPFunctionModel:
     return MCPFunctionModel.get(endpoint_id, name)
@@ -98,7 +143,7 @@ def get_mcp_function_type(
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPFunctionType(**Utility.json_loads(Utility.json_dumps(mcp_function)))
+    return MCPFunctionType(**Utility.json_normalize(mcp_function))
 
 
 def resolve_mcp_function(
@@ -152,6 +197,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
     return inquiry_funct, count_funct, args
 
 
+@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -163,6 +209,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
     type_funct=get_mcp_function_type,
 )
 def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
+
     endpoint_id = kwargs.get("endpoint_id")
     name = kwargs.get("name")
 
@@ -181,6 +228,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
             "class_name",
             "function_name",
             "return_type",
+            "is_async",
         ]:
             if key in kwargs:
                 cols[key] = kwargs[key]
@@ -207,6 +255,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
         "class_name": MCPFunctionModel.class_name,
         "function_name": MCPFunctionModel.function_name,
         "return_type": MCPFunctionModel.return_type,
+        "is_async": MCPFunctionModel.is_async,
     }
 
     for key, field in field_map.items():
@@ -217,6 +266,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
     return
 
 
+@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -225,5 +275,6 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
     model_funct=get_mcp_function,
 )
 def delete_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
+
     kwargs["entity"].delete()
     return True

@@ -18,7 +18,6 @@ from pydantic import AnyUrl
 from silvaengine_utility import Utility
 
 from ..models import utils
-from .mcp_core import MCPCore
 
 MCP_FUNCTION_LIST = """query mcpFunctionList(
         $pageNumber: Int, 
@@ -46,7 +45,8 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
             moduleName 
             className 
             functionName 
-            returnType 
+            returnType
+            isAsync 
             updatedBy 
             createdAt 
             updatedAt 
@@ -97,9 +97,73 @@ class Config:
     Manages shared configuration variables across the application.
     """
 
+    # Cache Configuration
+    CACHE_TTL = 1800
+    CACHE_ENABLED = True
+
+    CACHE_NAMES = {
+        "models": "ai_mcp_daemon_engine.models",
+        "queries": "ai_mcp_daemon_engine.queries",
+    }
+
+    CACHE_ENTITY_CONFIG = {
+        "mcp_function": {
+            "module": "ai_mcp_daemon_engine.models.mcp_function",
+            "model_class": "MCPFunctionModel",
+            "getter": "get_mcp_function",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_function.resolve_mcp_function_list",
+            "cache_keys": ["context:endpoint_id", "key:name"],
+        },
+        "mcp_module": {
+            "module": "ai_mcp_daemon_engine.models.mcp_module",
+            "model_class": "MCPModuleModel",
+            "getter": "get_mcp_module",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_module.resolve_mcp_module_list",
+            "cache_keys": ["context:endpoint_id", "key:module_name"],
+        },
+        "mcp_function_call": {
+            "module": "ai_mcp_daemon_engine.models.mcp_function_call",
+            "model_class": "MCPFunctionCallModel",
+            "getter": "get_mcp_function_call",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_function_call.resolve_mcp_function_call_list",
+            "cache_keys": ["context:endpoint_id", "key:mcp_function_call_uuid"],
+        },
+        "mcp_setting": {
+            "module": "ai_mcp_daemon_engine.models.mcp_setting",
+            "model_class": "MCPSettingModel",
+            "getter": "get_mcp_setting",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_setting.resolve_mcp_setting_list",
+            "cache_keys": ["context:endpoint_id", "key:setting_id"],
+        },
+    }
+
+    CACHE_RELATIONSHIPS = {
+        "mcp_module": [
+            {
+                "entity_type": "mcp_function",
+                "module": "mcp_function",
+                "list_resolver": "resolve_mcp_function_list",
+                "dependency_key": "module_name",
+                "parent_key": "module_name",
+            }
+        ],
+        "mcp_function": [
+            {
+                "entity_type": "mcp_function_call",
+                "module": "mcp_function_call",
+                "list_resolver": "resolve_mcp_function_call_list",
+                "dependency_key": "name",
+                "parent_key": "name",
+            }
+        ],
+    }
+
+
+    setting: Dict[str, Any] = {}
+
     # === SSE Client Registry ===
     sse_clients: Dict[int, asyncio.Queue] = {}
-    user_clients: dict[str, set[int]] = {}
+    user_clients: Dict[str, set[int]] = {}
     transport = None
     port = None
     mcp_configuration = {}
@@ -110,9 +174,10 @@ class Config:
     mcp_core = None
     aws_s3 = None
     aws_cognito_idp = None
+    aws_lambda = None
 
     # ----------------- universal -----------------
-    auth_provider: str = None  # "local" | "cognito"
+    auth_provider: str = None  # "local" | "cognito" | "api_gateway"
 
     # -------- local-JWT (HS256) settings ---------
     jwt_secret_key: str = None
@@ -145,6 +210,7 @@ class Config:
         """
         try:
             cls.logger = logger
+            cls.setting = setting
             cls._set_parameters(setting)
             cls._setup_function_paths(setting)
             if cls.transport == "sse" and cls.auth_provider == "local":
@@ -217,6 +283,8 @@ class Config:
             setting.get(k)
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
+            from .mcp_core import MCPCore
+
             cls.mcp_core = MCPCore(logger, **setting)
 
     @classmethod
@@ -234,14 +302,19 @@ class Config:
                 setting.get(k)
                 for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
             ):
-                cls.aws_s3 = boto3.client(
-                    "s3",
-                    **{
-                        "region_name": setting["region_name"],
-                        "aws_access_key_id": setting["aws_access_key_id"],
-                        "aws_secret_access_key": setting["aws_secret_access_key"],
-                    },
-                )
+                aws_credentials = {
+                    "region_name": setting["region_name"],
+                    "aws_access_key_id": setting["aws_access_key_id"],
+                    "aws_secret_access_key": setting["aws_secret_access_key"],
+                }
+            else:
+                aws_credentials = {}
+
+            cls.aws_s3 = boto3.client(
+                "s3",
+                **aws_credentials,
+                config=boto3.session.Config(signature_version="s3v4"),
+            )
 
             if (
                 all(setting.get(k) for k in ["region_name", "cognito_user_pool_id"])
@@ -255,6 +328,9 @@ class Config:
                 cls.aws_cognito_idp = boto3.client(
                     "cognito-idp", region_name=setting["region_name"]
                 )
+
+            if cls.auth_provider == "api_gateway":
+                cls.aws_lambda = boto3.client("lambda", **aws_credentials)
         except Exception as e:
             logger.exception("Failed to initialize AWS services configuration.")
             raise e
@@ -399,7 +475,7 @@ class Config:
     @classmethod
     def _build_module_link(cls, func: Dict[str, Any]) -> Dict[str, Any]:
         """Build module link with proper field mapping."""
-        return {
+        module_link = {
             "type": func.get("mcpType", ""),  # Fixed: was "type" should be "mcpType"
             "name": func.get("name", ""),
             "module_name": func.get("moduleName", ""),
@@ -407,6 +483,12 @@ class Config:
             "function_name": func.get("functionName", ""),
             "return_type": func.get("returnType", "text"),  # Default to "text"
         }
+
+        # Include is_async if it's not None
+        if func.get("isAsync") is not None:
+            module_link["is_async"] = func.get("isAsync")
+
+        return module_link
 
     @classmethod
     def _fetch_modules_and_settings(
@@ -558,3 +640,35 @@ class Config:
             cls.mcp_configuration.clear()
             if cls.logger:
                 cls.logger.info("Cleared all MCP configuration cache")
+
+    @classmethod
+    def get_cache_name(cls, module_type: str, model_name: str) -> str:
+        """Generate standardized cache names."""
+        base_name = cls.CACHE_NAMES.get(module_type, f"ai_mcp_daemon_engine.{module_type}")
+        return f"{base_name}.{model_name}"
+
+    @classmethod
+    def get_cache_ttl(cls) -> int:
+        """Get the configured cache TTL."""
+        return cls.CACHE_TTL
+
+    @classmethod
+    def is_cache_enabled(cls) -> bool:
+        """Check if caching is enabled."""
+        return cls.CACHE_ENABLED
+
+    @classmethod
+    def get_cache_entity_config(cls) -> Dict[str, Dict[str, Any]]:
+        """Get cache configuration metadata for each entity type."""
+        return cls.CACHE_ENTITY_CONFIG
+
+    @classmethod
+    def get_cache_relationships(cls) -> Dict[str, List[Dict[str, Any]]]:
+        """Get entity cache dependency relationships."""
+        return cls.CACHE_RELATIONSHIPS
+
+    @classmethod
+    def get_entity_children(cls, entity_type: str) -> List[Dict[str, Any]]:
+        """Get child entities for a specific entity type."""
+        return cls.CACHE_RELATIONSHIPS.get(entity_type, [])
+

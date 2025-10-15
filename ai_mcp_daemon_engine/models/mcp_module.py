@@ -4,6 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
+import functools
 import logging
 import traceback
 import uuid
@@ -28,8 +29,9 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility
+from silvaengine_utility import Utility, method_cache
 
+from ..handlers.config import Config
 from ..types.mcp_module import MCPModuleListType, MCPModuleType
 
 
@@ -63,6 +65,64 @@ class MCPModuleModel(BaseModel):
     mcp_package_index = MCPPackgeIndex()
 
 
+def purge_cache():
+    def actual_decorator(original_function):
+        @functools.wraps(original_function)
+        def wrapper_function(*args, **kwargs):
+            try:
+                # Use cascading cache purging for mcp modules
+                from ..models.cache import (
+                    _extract_module_setting_ids,
+                    purge_entity_cascading_cache,
+                )
+
+                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
+                    "endpoint_id"
+                )
+                entity_keys = {}
+                if kwargs.get("module_name"):
+                    entity_keys["module_name"] = kwargs.get("module_name")
+
+                result = purge_entity_cascading_cache(
+                    args[0].context.get("logger"),
+                    entity_type="mcp_module",
+                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    entity_keys=entity_keys if entity_keys else None,
+                    cascade_depth=3,
+                )
+
+                # Purge setting caches if module has classes with setting_ids
+                try:
+                    module = resolve_mcp_module(args[0], **kwargs)
+                    if module:
+                        setting_ids = _extract_module_setting_ids(module.classes)
+                        for setting_id in setting_ids:
+                            purge_entity_cascading_cache(
+                                args[0].context.get("logger"),
+                                entity_type="mcp_setting",
+                                context_keys={"endpoint_id": endpoint_id}
+                                if endpoint_id
+                                else None,
+                                entity_keys={"setting_id": setting_id},
+                                cascade_depth=3,
+                            )
+                except Exception as e:
+                    pass
+
+                ## Original function.
+                result = original_function(*args, **kwargs)
+
+                return result
+            except Exception as e:
+                log = traceback.format_exc()
+                args[0].context.get("logger").error(log)
+                raise e
+
+        return wrapper_function
+
+    return actual_decorator
+
+
 def create_mcp_module_table(logger: logging.Logger) -> bool:
     """Create the MCP Module table if it doesn't exist."""
     if not MCPModuleModel.exists():
@@ -77,6 +137,9 @@ def create_mcp_module_table(logger: logging.Logger) -> bool:
     wait=wait_exponential(multiplier=1, max=60),
     stop=stop_after_attempt(5),
 )
+@method_cache(
+    ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name("models", "mcp_module")
+)
 def get_mcp_module(endpoint_id: str, module_name: str) -> MCPModuleModel:
     return MCPModuleModel.get(endpoint_id, module_name)
 
@@ -85,21 +148,17 @@ def get_mcp_module_count(endpoint_id: str, module_name: str) -> int:
     return MCPModuleModel.count(endpoint_id, MCPModuleModel.module_name == module_name)
 
 
-def get_mcp_module_type(
-    info: ResolveInfo, mcp_module: MCPModuleModel
-) -> MCPModuleType:
+def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:
     try:
         mcp_module = mcp_module.__dict__["attribute_values"]
     except Exception as e:
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPModuleType(**Utility.json_loads(Utility.json_dumps(mcp_module)))
+    return MCPModuleType(**Utility.json_normalize(mcp_module))
 
 
-def resolve_mcp_module(
-    info: ResolveInfo, **kwargs: Dict[str, Any]
-) -> MCPModuleType:
+def resolve_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPModuleType:
     count = get_mcp_module_count(info.context["endpoint_id"], kwargs["module_name"])
     if count == 0:
         return None
@@ -139,6 +198,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     return inquiry_funct, count_funct, args
 
 
+@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -150,6 +210,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     type_funct=get_mcp_module_type,
 )
 def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
+
     endpoint_id = kwargs.get("endpoint_id")
     module_name = kwargs.get("module_name")
 
@@ -194,6 +255,7 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     return
 
 
+@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "endpoint_id",
@@ -202,5 +264,6 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     model_funct=get_mcp_module,
 )
 def delete_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
+
     kwargs["entity"].delete()
     return True
