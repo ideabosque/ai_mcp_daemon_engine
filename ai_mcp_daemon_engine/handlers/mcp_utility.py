@@ -13,7 +13,7 @@ import threading
 import time
 import traceback
 import zipfile
-from datetime import datetime
+import pendulum
 from typing import Any, Dict, Optional
 
 from mcp.types import (
@@ -220,7 +220,7 @@ def execute_decorator():
             try:
                 Config.logger.info("Starting execution of MCP function")
                 mcp_function_call = None
-                start_time = datetime.now()
+                start_time = pendulum.now("UTC")
                 endpoint_id = args[0]
 
                 if kwargs.get("mcp_function_call_uuid"):
@@ -287,8 +287,9 @@ def execute_decorator():
                     content = result
 
                 if mcp_function_call is not None:
-                    end_time = datetime.now()
-                    time_spent = int((end_time - start_time).total_seconds() * 1000)
+                    time_spent = int(
+                        pendulum.now("UTC").diff(start_time).in_seconds() * 1000
+                    )
                     Config.logger.info(f"Function execution time: {time_spent}ms")
 
                     Config.logger.info("Updating MCP function call with results")

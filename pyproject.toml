@@ -13,6 +13,7 @@ dependencies = [
   "passlib[bcrypt]",
   "graphene",
   "python-dotenv",
+  "pendulum",
   "SilvaEngine-DynamoDB-Base",
   "SilvaEngine-Utility",
 ]

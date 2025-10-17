@@ -8,7 +8,7 @@ import asyncio
 import json
 import time
 from collections import defaultdict
-from datetime import datetime
+import pendulum
 from typing import Any, AsyncGenerator, Dict
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -62,8 +62,8 @@ async def sse_event_generator(
     try:
         # Send connection event
         yield f"event: connected\ndata: {json.dumps({
-            'client_id': client_id, 
-            'timestamp': datetime.now().isoformat()
+            'client_id': client_id,
+            'timestamp': pendulum.now('UTC').isoformat()
         })}\n\n"
 
         while not await request.is_disconnected():
@@ -76,7 +76,7 @@ async def sse_event_generator(
                 heartbeat = json.dumps(
                     {
                         "client_id": client_id,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": pendulum.now('UTC').isoformat(),
                         "type": "heartbeat",
                     }
                 )
@@ -234,7 +234,7 @@ async def post_sse_message(
                 "method": message["method"],
                 "request": jsonable_encoder(message),
                 "response": jsonable_encoder(response),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": pendulum.now('UTC').isoformat(),
             },
         )
 
@@ -304,7 +304,7 @@ async def health_check() -> Dict[str, Any]:
     stats = await sse_manager.get_stats()
     return {
         "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": pendulum.now('UTC').isoformat(),
         "sse_stats": stats,
     }
 
@@ -314,7 +314,7 @@ async def get_metrics() -> Dict[str, Any]:
     """Get detailed server metrics"""
     stats = await sse_manager.get_stats()
     return {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": pendulum.now('UTC').isoformat(),
         "sse_manager": stats,
         "rate_limiting": {
             "active_ips": len(request_counts),
@@ -346,7 +346,7 @@ async def refresh_mcp_cache(
         return {
             "status": "success",
             "message": f"Cache refreshed for endpoint: {endpoint_id}",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": pendulum.now('UTC').isoformat(),
             "cache_stats": {
                 "endpoint_id": endpoint_id,
                 "tools_count": len(config.get("tools", [])),
@@ -377,7 +377,7 @@ async def clear_endpoint_cache(
     return {
         "status": "success",
         "message": f"Cache cleared for endpoint: {endpoint_id}",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": pendulum.now('UTC').isoformat(),
     }
 
 
@@ -390,7 +390,7 @@ async def clear_all_cache(user: Dict = Depends(current_user)) -> Dict[str, Any]:
     return {
         "status": "success",
         "message": "All MCP configuration cache cleared",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": pendulum.now('UTC').isoformat(),
         "cleared_endpoints": cached_endpoints,
     }
 
@@ -410,7 +410,7 @@ async def get_cache_status(
     return {
         "endpoint_id": endpoint_id,
         "is_cached": is_cached,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": pendulum.now('UTC').isoformat(),
         "cache_info": (
             {
                 "tools_count": len(config.get("tools", [])),
