@@ -33,11 +33,10 @@ class FlexJWTMiddleware(BaseHTTPMiddleware):
         mode = Config.auth_provider
 
         try:
-            claims = (
-                verify_cognito_jwt(token)
-                if mode == "cognito"
-                else verify_local_jwt(token)
-            )
+            if mode == "cognito":
+                claims = await verify_cognito_jwt(token)
+            else:
+                claims = verify_local_jwt(token)
             request.state.user = claims
         except HTTPException as e:
             return JSONResponse(

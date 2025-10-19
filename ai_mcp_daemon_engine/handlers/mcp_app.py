@@ -8,9 +8,10 @@ import asyncio
 import json
 import time
 from collections import defaultdict
-import pendulum
+from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Dict
 
+import pendulum
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,8 +26,39 @@ from .sse_manager import sse_manager
 # === Rate Limiting ===
 request_counts = defaultdict(list)
 
+
+# === Application Lifecycle Events ===
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown events"""
+    # Startup
+    if Config.logger:
+        Config.logger.info("Starting up MCP SSE Server...")
+
+    yield
+
+    # Shutdown
+    if Config.logger:
+        Config.logger.info("Shutting down application, cleaning up resources...")
+
+    # Cleanup SSE manager
+    await sse_manager.cleanup_all()
+
+    # Cleanup HTTP client if using Cognito auth
+    if Config.auth_provider == "cognito":
+        try:
+            from .jwt_cognito import cleanup_http_client
+
+            await cleanup_http_client()
+            if Config.logger:
+                Config.logger.info("HTTP client cleaned up successfully")
+        except Exception as e:
+            if Config.logger:
+                Config.logger.error(f"Error cleaning up HTTP client: {e}")
+
+
 # === FastAPI and MCP Initialization ===
-app = FastAPI(title="MCP SSE Server")
+app = FastAPI(title="MCP SSE Server", lifespan=lifespan)
 
 # Add CORS with more restrictive settings
 app.add_middleware(
@@ -76,7 +108,7 @@ async def sse_event_generator(
                 heartbeat = json.dumps(
                     {
                         "client_id": client_id,
-                        "timestamp": pendulum.now('UTC').isoformat(),
+                        "timestamp": pendulum.now("UTC").isoformat(),
                         "type": "heartbeat",
                     }
                 )
@@ -234,7 +266,7 @@ async def post_sse_message(
                 "method": message["method"],
                 "request": jsonable_encoder(message),
                 "response": jsonable_encoder(response),
-                "timestamp": pendulum.now('UTC').isoformat(),
+                "timestamp": pendulum.now("UTC").isoformat(),
             },
         )
 
@@ -304,7 +336,7 @@ async def health_check() -> Dict[str, Any]:
     stats = await sse_manager.get_stats()
     return {
         "status": "healthy",
-        "timestamp": pendulum.now('UTC').isoformat(),
+        "timestamp": pendulum.now("UTC").isoformat(),
         "sse_stats": stats,
     }
 
@@ -314,7 +346,7 @@ async def get_metrics() -> Dict[str, Any]:
     """Get detailed server metrics"""
     stats = await sse_manager.get_stats()
     return {
-        "timestamp": pendulum.now('UTC').isoformat(),
+        "timestamp": pendulum.now("UTC").isoformat(),
         "sse_manager": stats,
         "rate_limiting": {
             "active_ips": len(request_counts),
@@ -346,7 +378,7 @@ async def refresh_mcp_cache(
         return {
             "status": "success",
             "message": f"Cache refreshed for endpoint: {endpoint_id}",
-            "timestamp": pendulum.now('UTC').isoformat(),
+            "timestamp": pendulum.now("UTC").isoformat(),
             "cache_stats": {
                 "endpoint_id": endpoint_id,
                 "tools_count": len(config.get("tools", [])),
@@ -377,7 +409,7 @@ async def clear_endpoint_cache(
     return {
         "status": "success",
         "message": f"Cache cleared for endpoint: {endpoint_id}",
-        "timestamp": pendulum.now('UTC').isoformat(),
+        "timestamp": pendulum.now("UTC").isoformat(),
     }
 
 
@@ -390,7 +422,7 @@ async def clear_all_cache(user: Dict = Depends(current_user)) -> Dict[str, Any]:
     return {
         "status": "success",
         "message": "All MCP configuration cache cleared",
-        "timestamp": pendulum.now('UTC').isoformat(),
+        "timestamp": pendulum.now("UTC").isoformat(),
         "cleared_endpoints": cached_endpoints,
     }
 
@@ -410,7 +442,7 @@ async def get_cache_status(
     return {
         "endpoint_id": endpoint_id,
         "is_cached": is_cached,
-        "timestamp": pendulum.now('UTC').isoformat(),
+        "timestamp": pendulum.now("UTC").isoformat(),
         "cache_info": (
             {
                 "tools_count": len(config.get("tools", [])),

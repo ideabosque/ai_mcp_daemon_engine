@@ -8,7 +8,7 @@ dependencies = [
   "fastapi[all]",
   "uvicorn[standard]",
   "python-jose[cryptography]",
-  "httpx",
+  "httpx[http2]",
   "bcrypt",
   "passlib[bcrypt]",
   "graphene",
