@@ -168,7 +168,7 @@ def get_mcp_function_call_type(
                     Bucket=Config.funct_bucket_name, Key=s3_key
                 )
                 content = response["Body"].read().decode("utf-8")
-            except Exception:
+            except Exception as e:
                 raise e
     except Exception as e:
         log = traceback.format_exc()

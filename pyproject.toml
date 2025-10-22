@@ -20,3 +20,15 @@ dependencies = [
 
 [project.scripts]
 mcp-daemon = "ai_mcp_daemon_engine.main:main"
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
+]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+reportCallIssue = "none"
+reportArgumentType = "none"
+reportOptionalMemberAccess = "none"
+reportAttributeAccessIssue = "none"

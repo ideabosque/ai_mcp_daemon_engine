@@ -7,7 +7,6 @@ __author__ = "bibow"
 import functools
 import logging
 import traceback
-import uuid
 from typing import Any, Dict
 
 import pendulum
@@ -15,7 +14,6 @@ from graphene import ResolveInfo
 from pynamodb.attributes import (
     ListAttribute,
     MapAttribute,
-    NumberAttribute,
     UnicodeAttribute,
     UTCDateTimeAttribute,
 )
@@ -106,7 +104,7 @@ def purge_cache():
                                 entity_keys={"setting_id": setting_id},
                                 cascade_depth=3,
                             )
-                except Exception as e:
+                except Exception:
                     pass
 
                 ## Original function.
@@ -158,7 +156,7 @@ def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPMod
     return MCPModuleType(**Utility.json_normalize(mcp_module))
 
 
-def resolve_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPModuleType:
+def resolve_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPModuleType | None:
     count = get_mcp_module_count(info.context["endpoint_id"], kwargs["module_name"])
     if count == 0:
         return None

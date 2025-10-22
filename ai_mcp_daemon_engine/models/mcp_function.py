@@ -7,7 +7,6 @@ __author__ = "bibow"
 import functools
 import logging
 import traceback
-import uuid
 from typing import Any, Dict
 
 import pendulum
@@ -15,7 +14,6 @@ from graphene import ResolveInfo
 from pynamodb.attributes import (
     BooleanAttribute,
     MapAttribute,
-    NumberAttribute,
     UnicodeAttribute,
     UTCDateTimeAttribute,
 )
@@ -148,7 +146,7 @@ def get_mcp_function_type(
 
 def resolve_mcp_function(
     info: ResolveInfo, **kwargs: Dict[str, Any]
-) -> MCPFunctionType:
+) -> MCPFunctionType | None:
     count = get_mcp_function_count(info.context["endpoint_id"], kwargs["name"])
     if count == 0:
         return None

@@ -7,19 +7,15 @@ __author__ = "bibow"
 import functools
 import logging
 import traceback
-import uuid
 from typing import Any, Dict
 
 import pendulum
 from graphene import ResolveInfo
 from pynamodb.attributes import (
-    ListAttribute,
     MapAttribute,
-    NumberAttribute,
     UnicodeAttribute,
     UTCDateTimeAttribute,
 )
-from pynamodb.indexes import AllProjection, LocalSecondaryIndex
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from silvaengine_dynamodb_base import (
@@ -122,7 +118,7 @@ def get_mcp_setting_type(
     return MCPSettingType(**Utility.json_normalize(mcp_setting))
 
 
-def resolve_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPSettingType:
+def resolve_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPSettingType | None:
     count = get_mcp_setting_count(info.context["endpoint_id"], kwargs["setting_id"])
     if count == 0:
         return None
