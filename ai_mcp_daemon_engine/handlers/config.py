@@ -158,7 +158,6 @@ class Config:
         ],
     }
 
-
     setting: Dict[str, Any] = {}
 
     # === SSE Client Registry ===
@@ -217,7 +216,7 @@ class Config:
                 cls._USERS = cls._load()
             cls._initialize_mcp_core(logger, setting)
             cls._initialize_aws_services(logger, setting)
-            if setting.get("test_mode") == "local_for_all":
+            if setting.get("initialize_tables"):
                 cls._initialize_tables(logger)
             logger.info("Configuration initialized successfully.")
         except Exception as e:
@@ -644,7 +643,9 @@ class Config:
     @classmethod
     def get_cache_name(cls, module_type: str, model_name: str) -> str:
         """Generate standardized cache names."""
-        base_name = cls.CACHE_NAMES.get(module_type, f"ai_mcp_daemon_engine.{module_type}")
+        base_name = cls.CACHE_NAMES.get(
+            module_type, f"ai_mcp_daemon_engine.{module_type}"
+        )
         return f"{base_name}.{model_name}"
 
     @classmethod
@@ -671,4 +672,3 @@ class Config:
     def get_entity_children(cls, entity_type: str) -> List[Dict[str, Any]]:
         """Get child entities for a specific entity type."""
         return cls.CACHE_RELATIONSHIPS.get(entity_type, [])
-
