@@ -176,15 +176,15 @@ class Config:
     aws_lambda = None
 
     # ----------------- universal -----------------
-    auth_provider: str = None  # "local" | "cognito" | "api_gateway"
+    auth_provider: str | None = None  # "local" | "cognito" | "api_gateway"
 
     # -------- local-JWT (HS256) settings ---------
-    jwt_secret_key: str = None
-    jwt_algorithm: str = None
-    access_token_exp: int = None  # minutes
+    jwt_secret_key: str | None = None
+    jwt_algorithm: str | None = None
+    access_token_exp: int | None = None  # minutes
 
     # local users file
-    local_user_file: str = None
+    local_user_file: str | None = None
     _USERS = None
 
     # static super-admin
@@ -197,7 +197,7 @@ class Config:
     cognito_app_client_id: str | None = None
     cognito_app_secret: str | None = None
     jwks_endpoint: AnyUrl | None = None
-    jwks_cache_ttl: int = None  # seconds
+    jwks_cache_ttl: int | None = None  # seconds
 
     @classmethod
     def initialize(cls, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
