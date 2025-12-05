@@ -6,7 +6,7 @@ __author__ = "bibow"
 import traceback
 from typing import Any, Dict
 
-from graphene import Boolean, Field, Mutation, String
+from graphene import Boolean, Field, Mutation, String, List
 
 from silvaengine_utility import JSON
 
@@ -20,7 +20,7 @@ class InsertUpdateMcpModule(Mutation):
     class Arguments:
         module_name = String(required=True)
         package_name = String(required=True)
-        classes = JSON(required=False)
+        classes = List(JSON, required=False)
         source = String(required=False)
         updated_by = String(required=True)
 
