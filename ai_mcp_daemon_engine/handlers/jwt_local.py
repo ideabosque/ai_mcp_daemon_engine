@@ -3,7 +3,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
-from datetime import datetime, timedelta, timezone
+import pendulum
 from functools import lru_cache
 from typing import Any, Dict
 
@@ -14,7 +14,7 @@ from .config import Config
 
 
 def _expiry():
-    return datetime.now(timezone.utc) + timedelta(minutes=Config.access_token_exp)
+    return pendulum.now('UTC').add(minutes=Config.access_token_exp)
 
 
 def create_local_jwt(payload: Dict[str, Any], forever: bool = False) -> str:
@@ -37,7 +37,7 @@ def verify_local_jwt(token: str) -> Dict[str, Any]:
         if not claims.get("perm"):
             if (
                 claims.get("exp") is None
-                or datetime.now(timezone.utc).timestamp() > claims["exp"]
+                or pendulum.now('UTC').timestamp() > claims["exp"]
             ):
                 raise JWTError("expired")
         return claims

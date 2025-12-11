@@ -8,13 +8,27 @@ dependencies = [
   "fastapi[all]",
   "uvicorn[standard]",
   "python-jose[cryptography]",
-  "httpx",
+  "httpx[http2]",
   "bcrypt",
   "passlib[bcrypt]",
   "graphene",
+  "python-dotenv",
+  "pendulum",
   "SilvaEngine-DynamoDB-Base",
   "SilvaEngine-Utility",
 ]
 
 [project.scripts]
 mcp-daemon = "ai_mcp_daemon_engine.main:main"
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
+]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+reportCallIssue = "none"
+reportArgumentType = "none"
+reportOptionalMemberAccess = "none"
+reportAttributeAccessIssue = "none"

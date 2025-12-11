@@ -18,36 +18,35 @@ from pydantic import AnyUrl
 from silvaengine_utility import Utility
 
 from ..models import utils
-from .mcp_core import MCPCore
 
 MCP_FUNCTION_LIST = """query mcpFunctionList(
-    $pageNumber: Int, 
-    $limit: Int, 
-    $mcpType: String, 
-    $moduleName: String, 
-    $functionName: String
-) {
+        $pageNumber: Int, 
+        $limit: Int, 
+        $mcpType: String, 
+        $moduleName: String, 
+        $className: String, 
+        $functionName: String
+    ) {
     mcpFunctionList(
         pageNumber: $pageNumber, 
         limit: $limit, 
         mcpType: $mcpType, 
         moduleName: $moduleName, 
+        className: $className, 
         functionName: $functionName
     ) {
-        pageSize 
-        pageNumber 
-        total 
-        mcpFunctionList { 
+        pageSize pageNumber total mcpFunctionList { 
             endpointId 
             name 
             mcpType 
             description 
-            data
-            annotations   
+            data 
+            annotations 
             moduleName 
+            className 
             functionName 
-            setting 
-            source 
+            returnType
+            isAsync 
             updatedBy 
             createdAt 
             updatedAt 
@@ -55,6 +54,29 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
     }
 }"""
 
+MCP_MODULE = """query mcpModule($moduleName: String!) {
+    mcpModule(moduleName: $moduleName) {
+        endpointId 
+        moduleName 
+        packageName 
+        classes 
+        source 
+        updatedBy 
+        createdAt 
+        updatedAt
+    }
+}"""
+
+MCP_SETTING = """query mcpSetting($settingId: String!) {
+    mcpSetting(settingId: $settingId) {
+        endpointId 
+        settingId 
+        setting 
+        updatedBy 
+        createdAt 
+        updatedAt
+    }
+}"""
 
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -75,9 +97,72 @@ class Config:
     Manages shared configuration variables across the application.
     """
 
+    # Cache Configuration
+    CACHE_TTL = 1800
+    CACHE_ENABLED = True
+
+    CACHE_NAMES = {
+        "models": "ai_mcp_daemon_engine.models",
+        "queries": "ai_mcp_daemon_engine.queries",
+    }
+
+    CACHE_ENTITY_CONFIG = {
+        "mcp_function": {
+            "module": "ai_mcp_daemon_engine.models.mcp_function",
+            "model_class": "MCPFunctionModel",
+            "getter": "get_mcp_function",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_function.resolve_mcp_function_list",
+            "cache_keys": ["context:endpoint_id", "key:name"],
+        },
+        "mcp_module": {
+            "module": "ai_mcp_daemon_engine.models.mcp_module",
+            "model_class": "MCPModuleModel",
+            "getter": "get_mcp_module",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_module.resolve_mcp_module_list",
+            "cache_keys": ["context:endpoint_id", "key:module_name"],
+        },
+        "mcp_function_call": {
+            "module": "ai_mcp_daemon_engine.models.mcp_function_call",
+            "model_class": "MCPFunctionCallModel",
+            "getter": "get_mcp_function_call",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_function_call.resolve_mcp_function_call_list",
+            "cache_keys": ["context:endpoint_id", "key:mcp_function_call_uuid"],
+        },
+        "mcp_setting": {
+            "module": "ai_mcp_daemon_engine.models.mcp_setting",
+            "model_class": "MCPSettingModel",
+            "getter": "get_mcp_setting",
+            "list_resolver": "ai_mcp_daemon_engine.queries.mcp_setting.resolve_mcp_setting_list",
+            "cache_keys": ["context:endpoint_id", "key:setting_id"],
+        },
+    }
+
+    CACHE_RELATIONSHIPS = {
+        "mcp_module": [
+            {
+                "entity_type": "mcp_function",
+                "module": "mcp_function",
+                "list_resolver": "resolve_mcp_function_list",
+                "dependency_key": "module_name",
+                "parent_key": "module_name",
+            }
+        ],
+        "mcp_function": [
+            {
+                "entity_type": "mcp_function_call",
+                "module": "mcp_function_call",
+                "list_resolver": "resolve_mcp_function_call_list",
+                "dependency_key": "name",
+                "parent_key": "name",
+            }
+        ],
+    }
+
+    setting: Dict[str, Any] = {}
+
     # === SSE Client Registry ===
-    sse_clients: Dict[int, asyncio.Queue] = None
-    user_clients: dict[str, set[int]] = None
+    sse_clients: Dict[int, asyncio.Queue] = {}
+    user_clients: Dict[str, set[int]] = {}
     transport = None
     port = None
     mcp_configuration = {}
@@ -88,17 +173,18 @@ class Config:
     mcp_core = None
     aws_s3 = None
     aws_cognito_idp = None
+    aws_lambda = None
 
     # ----------------- universal -----------------
-    auth_provider: str = None  # "local" | "cognito"
+    auth_provider: str | None = None  # "local" | "cognito" | "api_gateway"
 
     # -------- local-JWT (HS256) settings ---------
-    jwt_secret_key: str = None
-    jwt_algorithm: str = None
-    access_token_exp: int = None  # minutes
+    jwt_secret_key: str | None = None
+    jwt_algorithm: str | None = None
+    access_token_exp: int | None = None  # minutes
 
     # local users file
-    local_user_file: str = None
+    local_user_file: str | None = None
     _USERS = None
 
     # static super-admin
@@ -111,7 +197,7 @@ class Config:
     cognito_app_client_id: str | None = None
     cognito_app_secret: str | None = None
     jwks_endpoint: AnyUrl | None = None
-    jwks_cache_ttl: int = None  # seconds
+    jwks_cache_ttl: int | None = None  # seconds
 
     @classmethod
     def initialize(cls, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
@@ -123,13 +209,14 @@ class Config:
         """
         try:
             cls.logger = logger
+            cls.setting = setting
             cls._set_parameters(setting)
             cls._setup_function_paths(setting)
             if cls.transport == "sse" and cls.auth_provider == "local":
                 cls._USERS = cls._load()
             cls._initialize_mcp_core(logger, setting)
             cls._initialize_aws_services(logger, setting)
-            if setting.get("test_mode") == "local_for_all":
+            if setting.get("initialize_tables"):
                 cls._initialize_tables(logger)
             logger.info("Configuration initialized successfully.")
         except Exception as e:
@@ -195,6 +282,8 @@ class Config:
             setting.get(k)
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
+            from .mcp_core import MCPCore
+
             cls.mcp_core = MCPCore(logger, **setting)
 
     @classmethod
@@ -212,14 +301,19 @@ class Config:
                 setting.get(k)
                 for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
             ):
-                cls.aws_s3 = boto3.client(
-                    "s3",
-                    **{
-                        "region_name": setting["region_name"],
-                        "aws_access_key_id": setting["aws_access_key_id"],
-                        "aws_secret_access_key": setting["aws_secret_access_key"],
-                    },
-                )
+                aws_credentials = {
+                    "region_name": setting["region_name"],
+                    "aws_access_key_id": setting["aws_access_key_id"],
+                    "aws_secret_access_key": setting["aws_secret_access_key"],
+                }
+            else:
+                aws_credentials = {}
+
+            cls.aws_s3 = boto3.client(
+                "s3",
+                **aws_credentials,
+                config=boto3.session.Config(signature_version="s3v4"),
+            )
 
             if (
                 all(setting.get(k) for k in ["region_name", "cognito_user_pool_id"])
@@ -233,6 +327,9 @@ class Config:
                 cls.aws_cognito_idp = boto3.client(
                     "cognito-idp", region_name=setting["region_name"]
                 )
+
+            if cls.auth_provider == "api_gateway":
+                cls.aws_lambda = boto3.client("lambda", **aws_credentials)
         except Exception as e:
             logger.exception("Failed to initialize AWS services configuration.")
             raise e
@@ -257,115 +354,321 @@ class Config:
     def fetch_mcp_configuration(
         cls,
         endpoint_id: str,
+        force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """
-        Fetches and caches a GraphQL schema for a given function.
+        Fetches and caches MCP configuration for a given endpoint.
 
         Args:
-            logger: Logger instance for error reporting
-            endpoint_id: ID of the endpoint to fetch schema from
-            function_name: Name of function to get schema for
-            setting: Optional settings dictionary
+            endpoint_id: ID of the endpoint to fetch configuration from
+            force_refresh: If True, bypass cache and fetch fresh data
 
         Returns:
-            Dict containing the GraphQL schema
+            Dict containing the complete MCP configuration
+
+        Raises:
+            Exception: If GraphQL queries fail or data is malformed
         """
-        # Check if schema exists in cache, if not fetch and store it
-        if cls.mcp_configuration.get(endpoint_id) is None:
+        # Check if configuration exists in cache and force_refresh is not requested
+        if not force_refresh and cls.mcp_configuration.get(endpoint_id) is not None:
+            return cls.mcp_configuration[endpoint_id]
+
+        if cls.logger:
+            cls.logger.info(f"Fetching MCP configuration for endpoint: {endpoint_id}")
+
+        try:
+            # Step 1: Fetch all MCP functions
             response = cls.mcp_core.mcp_core_graphql(
-                **{
-                    "endpoint_id": endpoint_id,
-                    "query": MCP_FUNCTION_LIST,
-                    "variables": {},
-                }
+                endpoint_id=endpoint_id,
+                query=MCP_FUNCTION_LIST,
+                variables={},
             )
             response = Utility.json_loads(response)
-            mcp_functions = response["data"]["mcpFunctionList"]["mcpFunctionList"]
-            tools = list(filter(lambda x: x.get("mcpType") == "tool", mcp_functions))
-            resources = list(
-                filter(lambda x: x.get("mcpType") == "resource", mcp_functions)
-            )
-            prompts = list(
-                filter(lambda x: x.get("mcpType") == "prompt", mcp_functions)
-            )
 
+            if "errors" in response:
+                cls.logger.error(
+                    f"GraphQL errors in MCP_FUNCTION_LIST: {response['errors']}"
+                )
+                raise Exception(f"Failed to fetch MCP functions: {response['errors']}")
+
+            if (
+                not response.get("data", {})
+                .get("mcpFunctionList", {})
+                .get("mcpFunctionList")
+            ):
+                cls.logger.warning(
+                    f"No MCP functions found for endpoint: {endpoint_id}"
+                )
+                mcp_functions = []
+            else:
+                mcp_functions = response["data"]["mcpFunctionList"]["mcpFunctionList"]
+
+            # Step 2: Categorize functions by type
+            tools = [func for func in mcp_functions if func.get("mcpType") == "tool"]
+            resources = [
+                func for func in mcp_functions if func.get("mcpType") == "resource"
+            ]
+            prompts = [
+                func for func in mcp_functions if func.get("mcpType") == "prompt"
+            ]
+
+            if cls.logger:
+                cls.logger.info(
+                    f"Found {len(tools)} tools, {len(resources)} resources, {len(prompts)} prompts"
+                )
+
+            # Step 3: Build initial configuration structure
             mcp_configuration = {
-                "tools": {
-                    "tools": [
-                        dict(
-                            {
-                                "name": tool["name"],
-                                "description": tool.get("description"),
-                                "annotations": tool.get("annotations"),
-                            },
-                            **tool.get("data", {}),
-                        )
-                        for tool in tools
-                    ],
-                    "tool_modules": [
-                        {
-                            "name": tool["name"],
-                            "module_name": tool["moduleName"],
-                            "function_name": tool["functionName"],
-                            "setting": tool.get("setting"),
-                            "return_type": (
-                                "text"
-                                if tool.get("returnType") is None
-                                else tool.get("returnType")
-                            ),
-                            "source": tool.get("source"),
-                        }
-                        for tool in tools
-                    ],
-                },
-                "resources": {
-                    "resources": [
-                        dict(
-                            {
-                                "name": resource["name"],
-                                "description": resource.get("description"),
-                                "annotations": resource.get("annotations"),
-                            },
-                            **resource.get("data", {}),
-                        )
-                        for resource in resources
-                    ],
-                    "resource_modules": [
-                        {
-                            "name": resource["name"],
-                            "module_name": resource["moduleName"],
-                            "function_name": resource["functionName"],
-                            "setting": resource.get("setting"),
-                            "source": resource.get("source"),
-                        }
-                        for resource in resources
-                    ],
-                },
-                "prompts": {
-                    "prompts": [
-                        dict(
-                            {
-                                "name": prompt["name"],
-                                "description": prompt.get("description"),
-                                "annotations": prompt.get("annotations"),
-                            },
-                            **prompt.get("data", {}),
-                        )
-                        for prompt in prompts
-                    ],
-                    "prompt_modules": [
-                        {
-                            "name": prompt["name"],
-                            "module_name": prompt["moduleName"],
-                            "function_name": prompt["functionName"],
-                            "setting": prompt.get("setting"),
-                            "source": prompt.get("source"),
-                        }
-                        for prompt in prompts
-                    ],
-                },
+                "tools": [cls._build_function_config(tool) for tool in tools],
+                "resources": [
+                    cls._build_function_config(resource) for resource in resources
+                ],
+                "prompts": [cls._build_function_config(prompt) for prompt in prompts],
+                "module_links": [
+                    cls._build_module_link(func)
+                    for func in mcp_functions
+                    if func.get("moduleName") and func.get("className")
+                ],
+                "modules": [],
             }
 
+            # Step 4: Fetch module and setting information
+            modules_info = cls._fetch_modules_and_settings(
+                endpoint_id, mcp_configuration["module_links"]
+            )
+            mcp_configuration["modules"] = modules_info
+
+            # Step 5: Cache the configuration
             cls.mcp_configuration[endpoint_id] = mcp_configuration
 
-        return cls.mcp_configuration[endpoint_id]
+            if cls.logger:
+                cls.logger.info(
+                    f"Successfully cached MCP configuration for endpoint: {endpoint_id}"
+                )
+
+            return mcp_configuration
+
+        except Exception as e:
+            if cls.logger:
+                cls.logger.error(
+                    f"Failed to fetch MCP configuration for {endpoint_id}: {e}"
+                )
+            raise
+
+    @classmethod
+    def _build_function_config(cls, func: Dict[str, Any]) -> Dict[str, Any]:
+        """Build function configuration with safe data extraction."""
+        base_config = {
+            "name": func.get("name", ""),
+            "description": func.get("description", ""),
+            "annotations": func.get("annotations", {}),
+        }
+
+        # Safely merge data field
+        func_data = func.get("data", {})
+        if isinstance(func_data, dict):
+            base_config.update(func_data)
+
+        return base_config
+
+    @classmethod
+    def _build_module_link(cls, func: Dict[str, Any]) -> Dict[str, Any]:
+        """Build module link with proper field mapping."""
+        module_link = {
+            "type": func.get("mcpType", ""),  # Fixed: was "type" should be "mcpType"
+            "name": func.get("name", ""),
+            "module_name": func.get("moduleName", ""),
+            "class_name": func.get("className", ""),
+            "function_name": func.get("functionName", ""),
+            "return_type": func.get("returnType", "text"),  # Default to "text"
+        }
+
+        # Include is_async if it's not None
+        if func.get("isAsync") is not None:
+            module_link["is_async"] = func.get("isAsync")
+
+        return module_link
+
+    @classmethod
+    def _fetch_modules_and_settings(
+        cls, endpoint_id: str, module_links: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Fetch module and setting information efficiently."""
+        modules_info = []
+
+        # Group by module to reduce GraphQL calls
+        modules_classes = {}
+        for link in module_links:
+            module_name = link.get("module_name")
+            class_name = link.get("class_name")
+
+            if not module_name or not class_name:
+                if cls.logger:
+                    cls.logger.warning(
+                        f"Skipping module link with missing module_name or class_name: {link}"
+                    )
+                continue
+
+            if module_name not in modules_classes:
+                modules_classes[module_name] = set()
+            modules_classes[module_name].add(class_name)
+
+        # Process each module
+        for module_name, class_names in modules_classes.items():
+            try:
+                # Fetch module information
+                module_response = cls.mcp_core.mcp_core_graphql(
+                    endpoint_id=endpoint_id,
+                    query=MCP_MODULE,
+                    variables={"moduleName": module_name},
+                )
+                module_response = Utility.json_loads(module_response)
+
+                if "errors" in module_response:
+                    if cls.logger:
+                        cls.logger.error(
+                            f"Error fetching module {module_name}: {module_response['errors']}"
+                        )
+                    continue
+
+                module_data = module_response.get("data", {}).get("mcpModule")
+                if not module_data:
+                    if cls.logger:
+                        cls.logger.warning(f"No data found for module: {module_name}")
+                    continue
+
+                # Batch fetch settings for all classes in this module
+                setting_ids = []
+                class_to_setting_map = {}
+
+                for class_name in class_names:
+                    matching_class = next(
+                        (
+                            c
+                            for c in module_data.get("classes", [])
+                            if c.get("class_name") == class_name
+                        ),
+                        None,
+                    )
+
+                    if not matching_class:
+                        if cls.logger:
+                            cls.logger.warning(
+                                f"Class '{class_name}' not found in module '{module_name}'"
+                            )
+                        continue
+
+                    setting_id = matching_class.get("setting_id")
+                    if setting_id:
+                        setting_ids.append(setting_id)
+                        class_to_setting_map[class_name] = {
+                            "setting_id": setting_id,
+                            "class_info": matching_class,
+                        }
+
+                # Fetch settings (could be optimized further with batch query if available)
+                for class_name, class_info in class_to_setting_map.items():
+                    try:
+                        setting_response = cls.mcp_core.mcp_core_graphql(
+                            endpoint_id=endpoint_id,
+                            query=MCP_SETTING,
+                            variables={"settingId": class_info["setting_id"]},
+                        )
+                        setting_response = Utility.json_loads(setting_response)
+
+                        if "errors" in setting_response:
+                            if cls.logger:
+                                cls.logger.error(
+                                    f"Error fetching setting {class_info['setting_id']}: {setting_response['errors']}"
+                                )
+                            setting_data = {}
+                        else:
+                            setting_data = (
+                                setting_response.get("data", {})
+                                .get("mcpSetting", {})
+                                .get("setting", {})
+                            )
+
+                        # Build module info
+                        module_info = {
+                            "module_name": module_name,
+                            "package_name": module_data.get("packageName", module_name),
+                            "class_name": class_name,
+                            "setting": setting_data,
+                            "source": module_data.get("source", ""),
+                        }
+                        modules_info.append(module_info)
+
+                    except Exception as e:
+                        if cls.logger:
+                            cls.logger.error(
+                                f"Error processing setting for {module_name}.{class_name}: {e}"
+                            )
+                        # Add module info with empty setting as fallback
+                        module_info = {
+                            "module_name": module_name,
+                            "package_name": module_data.get("packageName", module_name),
+                            "class_name": class_name,
+                            "setting": {},
+                            "source": module_data.get("source", ""),
+                        }
+                        modules_info.append(module_info)
+
+            except Exception as e:
+                if cls.logger:
+                    cls.logger.error(f"Error processing module {module_name}: {e}")
+                continue
+
+        return modules_info
+
+    @classmethod
+    def refresh_mcp_configuration(cls, endpoint_id: str) -> Dict[str, Any]:
+        """Force refresh of MCP configuration for an endpoint."""
+        return cls.fetch_mcp_configuration(endpoint_id, force_refresh=True)
+
+    @classmethod
+    def clear_mcp_configuration_cache(cls, endpoint_id: str = None):
+        """Clear MCP configuration cache for specific endpoint or all endpoints."""
+        if endpoint_id:
+            cls.mcp_configuration.pop(endpoint_id, None)
+            if cls.logger:
+                cls.logger.info(
+                    f"Cleared MCP configuration cache for endpoint: {endpoint_id}"
+                )
+        else:
+            cls.mcp_configuration.clear()
+            if cls.logger:
+                cls.logger.info("Cleared all MCP configuration cache")
+
+    @classmethod
+    def get_cache_name(cls, module_type: str, model_name: str) -> str:
+        """Generate standardized cache names."""
+        base_name = cls.CACHE_NAMES.get(
+            module_type, f"ai_mcp_daemon_engine.{module_type}"
+        )
+        return f"{base_name}.{model_name}"
+
+    @classmethod
+    def get_cache_ttl(cls) -> int:
+        """Get the configured cache TTL."""
+        return cls.CACHE_TTL
+
+    @classmethod
+    def is_cache_enabled(cls) -> bool:
+        """Check if caching is enabled."""
+        return cls.CACHE_ENABLED
+
+    @classmethod
+    def get_cache_entity_config(cls) -> Dict[str, Dict[str, Any]]:
+        """Get cache configuration metadata for each entity type."""
+        return cls.CACHE_ENTITY_CONFIG
+
+    @classmethod
+    def get_cache_relationships(cls) -> Dict[str, List[Dict[str, Any]]]:
+        """Get entity cache dependency relationships."""
+        return cls.CACHE_RELATIONSHIPS
+
+    @classmethod
+    def get_entity_children(cls, entity_type: str) -> List[Dict[str, Any]]:
+        """Get child entities for a specific entity type."""
+        return cls.CACHE_RELATIONSHIPS.get(entity_type, [])

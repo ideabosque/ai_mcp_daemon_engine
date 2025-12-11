@@ -25,6 +25,45 @@ It bundles a FastAPI application that can:
 
 ---
 
+### Architecture Diagram (Mermaid)
+
+```mermaid
+graph TB
+    subgraph Clients
+        Browser[Browser / SSE Client]
+        StdioClient[Embedded Client]
+    end
+
+    subgraph API_Layer
+        FastAPI[FastAPI JSON-RPC / SSE]
+        Auth[Auth Middleware<br/>Local JWT or Cognito]
+    end
+
+    subgraph Daemon_Core
+        MCPServer[Dispatcher<br/>MCP Server]
+        SSEMgr[SSE Manager<br/>Per-user queues]
+        MCPUtils[MCP Utility<br/>Tool execution]
+    end
+
+    subgraph Data_Layer
+        DDB[(DynamoDB<br/>mcp-* tables)]
+        S3[(S3<br/>function bundles + call content)]
+        Cache[In-memory cache<br/>cascading purge]
+    end
+
+    Browser -->|SSE stream| FastAPI
+    StdioClient -->|STDIO JSON-RPC| MCPServer
+    FastAPI --> Auth --> MCPServer
+    MCPServer -->|GraphQL CRUD| DDB
+    MCPServer -->|Load modules| S3
+    MCPServer --> SSEMgr --> Browser
+    MCPUtils -->|Record calls| DDB
+    MCPUtils -->|Store payloads| S3
+    MCPServer -.->|Purge| Cache
+```
+
+---
+
 ## Directory Layout
 
 ```text
@@ -70,6 +109,16 @@ curl -N http://localhost:8000/default/mcp -H "Authorization: Bearer <token>"
 
 ---
 
+## Project Status and Roadmap
+
+- Status: Beta-ready daemon; ~75% complete. Core runtime, transport, auth, MCP integration, and GraphQL CRUD are complete; observability and testing modernization are in progress.
+- Architecture snapshot: FastAPI JSON-RPC/SSE plus STDIO sidecar; DynamoDB persistence with tenant isolation via `endpoint_id`; dynamic function bundles from S3; cascading cache purge; pluggable auth (Local JWT or AWS Cognito).
+- Current hardening: Adding structured logging, metrics (Prometheus/CloudWatch), rate limiting, and request-scoped caching.
+- Testing modernization: Migrating legacy `unittest` to `pytest` with markers for `integration`, `sse`, `auth`, `mcp_core`, and `graphql`; coverage targets 80%+ overall and 90%+ for core handlers.
+- Planned features: CI/CD pipelines, automated benchmarking, client SDK generation, multi-region replication support, and DataLoader-style batch queries for GraphQL.
+
+---
+
 ## Running with AWS Cognito
 
 ```bash
@@ -112,107 +161,207 @@ Supply a JSON blob that describes the endpoint’s capabilities and set its path
 
 ```json
 {
-    "tools": {
-        "tools": [
-            {
-                "name": "hello",
-                "description": "Greet someone",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "Name",
-                            "default": "World"
-                        }
+    "tools": [
+        {
+            "name": "hello",
+            "description": "Greet someone",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name",
+                        "default": "World"
                     }
-                },
-                "annotations": null
+                }
             },
-            {
-                "name": "add_numbers",
-                "description": "Add two numbers",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "a": {
-                            "type": "integer",
-                            "description": "First number"
-                        },
-                        "b": {
-                            "type": "integer",
-                            "description": "Second number"
-                        }
+            "annotations": null
+        },
+        {
+            "name": "add_numbers",
+            "description": "Add two numbers",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "a": {
+                        "type": "integer",
+                        "description": "First number"
                     },
-                    "required": [
-                        "a",
-                        "b"
-                    ]
-                },
-                "annotations": null
-            }
-        ],
-        "tool_modules": [
-            {
-                "name": "hello",
-                "module_name": "mcp_function_demo",
-                "function_name": "hello",
-                "setting": {},
-                "return_type": "text"
-            },
-            {
-                "name": "add_numbers",
-                "module_name": "mcp_function_demo",
-                "function_name": "add_numbers",
-                "setting": {},
-                "return_type": "text"
-            }
-        ]
-    },
-    "resources": {
-        "resources": [
-            {
-                "uri": "status://server",
-                "name": "Server Status",
-                "description": "Status info",
-                "mimeType": "text/plain",
-                "size": null,
-                "annotations": null
-            }
-        ],
-        "resource_modules": [
-            {
-                "name": "Server Status",
-                "module_name": "mcp_function_demo",
-                "function_name": "read_resource",
-                "setting": {}
-            }
-        ]
-    },
-    "prompts": {
-        "prompts": [
-            {
-                "name": "example-prompt",
-                "description": "An example prompt template",
-                "arguments": [
-                    {
-                        "name": "arg1",
-                        "description": "Example argument",
-                        "required": true
+                    "b": {
+                        "type": "integer",
+                        "description": "Second number"
                     }
+                },
+                "required": [
+                    "a",
+                    "b"
                 ]
-            }
-        ],
-        "prompt_modules": [
-            {
-                "name": "example-prompt",
-                "module_name": "mcp_function_demo",
-                "function_name": "get_prompt",
-                "setting": {}
-            }
-        ]
-    }
+            },
+            "annotations": null
+        }
+    ],
+    "resources": [
+        {
+            "uri": "status://server",
+            "name": "Server Status",
+            "description": "Status info",
+            "mimeType": "text/plain",
+            "size": null,
+            "annotations": null
+        }
+    ],
+    "prompts": [
+        {
+            "name": "example-prompt",
+            "description": "An example prompt template",
+            "arguments": [
+                {
+                    "name": "arg1",
+                    "description": "Example argument",
+                    "required": true
+                }
+            ]
+        }
+    ],
+    "module_links": [
+        {
+            "type": "tool",
+            "name": "hello",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "hello",
+            "return_type": "text"
+        },
+        {
+            "type": "tool",
+            "name": "add_numbers",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "add_numbers",
+            "return_type": "text"
+        },
+        {
+            "type": "resource",
+            "name": "Server Status",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "read_resource"
+        },
+        {
+            "type": "prompt",
+            "name": "example-prompt",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "function_name": "get_prompt"
+        }
+    ],
+    "modules": [
+        {
+            "package_name": "mcp_function_demo",
+            "module_name": "mcp_function_demo",
+            "class_name": "MCPFunctionDemo",
+            "setting": {}
+        }
+    ]
 }
+```
+
+---
+
+## Model Relationships
+
+### Relationship Overview
+
+```
+ENDPOINT (partition key: endpoint_id)
+    |
+    |-- MCP MODULE (module_name, package_name, classes[])
+    |       |
+    |       |-- classes[].setting_id ---> MCP SETTING (setting_id, setting map)
+    |       |
+    |       |-- module_name/class_name ---> MCP FUNCTION (name, mcp_type, data, return_type, is_async)
+    |                   |
+    |                   |-- name/mcp_type ---> MCP FUNCTION CALL (mcp_function_call_uuid, arguments, status)
+    |                                   |
+    |                                   |-- optional content in S3: mcp_content/<uuid>.json when has_content=true
+```
+
+### Core Entities
+
+- **MCPModuleModel**: Catalog of executable Python modules; stores `module_name`, `package_name`, `classes[]` (each class may carry a `setting_id`), optional `source` for provenance.
+- **MCPFunctionModel**: Logical MCP definitions (`tool` / `resource` / `prompt`); keeps schema in `data`, links to executable code via `module_name` / `class_name` / `function_name`, and tracks `return_type` plus `is_async`.
+- **MCPFunctionCallModel**: Execution log for MCP functions; captures `arguments`, `status`, time metrics, and flags whether payload is persisted.
+- **MCPSettingModel**: Shared configuration blob; typically generated during config import and referenced by `classes[].setting_id`.
+
+### Relationship Patterns
+
+| Parent | Child | Linking Field(s) | Notes |
+| ------ | ----- | ---------------- | ----- |
+| `endpoint_id` | All models | `endpoint_id` (hash key) | Multi-tenant boundary for every table. |
+| MCPModule | MCPSetting | `classes[].setting_id` → `setting_id` | Module classes point to a shared setting document built during config import. |
+| MCPModule | MCPFunction | `module_name` / `class_name` | Functions reference the Python module/class implementing the MCP tool/resource/prompt. |
+| MCPFunction | MCPFunctionCall | `name` (+ `mcp_type`) | Call records keep the logical MCP name/type they executed; also used for cache invalidation. |
+| MCPFunctionCall | S3 Content | `mcp_function_call_uuid` | When `has_content` is true, payload is stored at `mcp_content/<uuid>.json` in the configured S3 bucket. |
+
+### Key Structures & Indexes
+
+| Model | Hash Key | Range Key | Secondary Indexes | Purpose |
+| ----- | -------- | --------- | ----------------- | ------- |
+| MCPModuleModel | `endpoint_id` | `module_name` | `package_name-index` (LSI) | Query modules by package or module name per endpoint. |
+| MCPFunctionModel | `endpoint_id` | `name` | `mcp_type-index` (LSI) | Filter tools/resources/prompts by MCP type. |
+| MCPFunctionCallModel | `endpoint_id` | `mcp_function_call_uuid` | `mcp_type-index`, `name-index` (LSIs) | Slice executions by MCP type or logical name. |
+| MCPSettingModel | `endpoint_id` | `setting_id` | — | Shared module configuration. |
+
+### Cache Cascade
+
+Cached reads are invalidated with parent → child propagation:
+- Purging a module also clears linked function caches (and their referenced settings).
+- Purging a function clears its call list caches.
+
+### Model ER Diagram (Mermaid)
+
+```mermaid
+erDiagram
+    endpoints ||--o{ mcp_modules : "defines"
+    endpoints ||--o{ mcp_settings : "configures"
+    mcp_modules ||--o{ mcp_functions : "provides"
+    mcp_functions ||--o{ mcp_function_calls : "executes"
+    mcp_modules ||--o{ mcp_settings : "references via classes[].setting_id"
+
+    mcp_modules {
+        string endpoint_id
+        string module_name
+        string package_name
+        list classes
+        string source
+        datetime updated_at
+    }
+    mcp_functions {
+        string endpoint_id
+        string name
+        string mcp_type
+        string module_name
+        string class_name
+        string function_name
+        string return_type
+        boolean is_async
+        json data
+    }
+    mcp_function_calls {
+        string endpoint_id
+        string mcp_function_call_uuid
+        string name
+        string mcp_type
+        json arguments
+        boolean has_content
+        string status
+        number time_spent
+    }
+    mcp_settings {
+        string endpoint_id
+        string setting_id
+        json setting
+    }
 ```
 
 ---

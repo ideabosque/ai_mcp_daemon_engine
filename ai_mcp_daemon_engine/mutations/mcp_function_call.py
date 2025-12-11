@@ -25,7 +25,7 @@ class InsertUpdateMcpFunctionCall(Mutation):
         name = String(required=False)
         mcp_type = String(required=False)
         arguments = JSON(required=False)
-        content = String(required=False)
+        has_content = Boolean(required=False)
         status = String(required=False)
         notes = String(required=False)
         time_spent = Int(required=False)
