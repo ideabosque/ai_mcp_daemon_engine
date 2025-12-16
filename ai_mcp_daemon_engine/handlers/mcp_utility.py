@@ -131,11 +131,11 @@ MCP_FUNCTION_CALL = """query mcpFunctionCall($mcpFunctionCallUuid: String!) {
 
 
 def _check_existing_function_call(
-    endpoint_id: str, mcp_function_call_uuid: str
+    partition_key: str, mcp_function_call_uuid: str
 ) -> Dict[str, Any]:
     response = Config.mcp_core.mcp_core_graphql(
         **{
-            "endpoint_id": endpoint_id,
+            "partition_key": partition_key,
             "query": MCP_FUNCTION_CALL,
             "variables": {
                 "mcpFunctionCallUuid": mcp_function_call_uuid,
@@ -154,7 +154,7 @@ def _check_existing_function_call(
 
 
 def _insert_update_mcp_function_call(
-    endpoint_id: str, **kwargs: Dict[str, Any]
+    partition_key: str, **kwargs: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
     Private helper function to insert/update MCP function call record
@@ -172,7 +172,7 @@ def _insert_update_mcp_function_call(
 
         response = Config.mcp_core.mcp_core_graphql(
             **{
-                "endpoint_id": endpoint_id,
+                "partition_key": partition_key,
                 "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
                 "variables": {
                     "mcpFunctionCallUuid": kwargs["mcp_function_call_uuid"],
@@ -188,7 +188,7 @@ def _insert_update_mcp_function_call(
         Config.logger.info("Making GraphQL call to insert/update MCP function")
         response = Config.mcp_core.mcp_core_graphql(
             **{
-                "endpoint_id": endpoint_id,
+                "partition_key": partition_key,
                 "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
                 "variables": {
                     "name": kwargs["name"],
@@ -222,15 +222,15 @@ def execute_decorator():
                 Config.logger.info("Starting execution of MCP function")
                 mcp_function_call = None
                 start_time = pendulum.now("UTC")
-                endpoint_id = args[0]
+                partition_key = args[0]
 
                 if kwargs.get("mcp_function_call_uuid"):
                     mcp_function_call = _check_existing_function_call(
-                        endpoint_id, kwargs["mcp_function_call_uuid"]
+                        partition_key, kwargs["mcp_function_call_uuid"]
                     )
 
-                if endpoint_id != "default" and mcp_function_call is None:
-                    Config.logger.info(f"Processing endpoint_id: {endpoint_id}")
+                if partition_key != "default" and mcp_function_call is None:
+                    Config.logger.info(f"Processing partition_key: {partition_key}")
                     mcp_type = original_function.__name__.replace(
                         "execute_", ""
                     ).replace("_function", "")
@@ -242,7 +242,7 @@ def execute_decorator():
                             (
                                 resource
                                 for resource in Config.fetch_mcp_configuration(
-                                    endpoint_id
+                                    partition_key
                                 )["resources"]
                                 if resource["uri"] == args[1]
                             ),
@@ -265,7 +265,7 @@ def execute_decorator():
                         )
 
                     mcp_function_call = _insert_update_mcp_function_call(
-                        endpoint_id,
+                        partition_key,
                         **{"name": name, "mcp_type": mcp_type, "arguments": arguments},
                     )
 
@@ -299,7 +299,7 @@ def execute_decorator():
 
                     Config.logger.info("Updating MCP function call with results")
                     _insert_update_mcp_function_call(
-                        endpoint_id,
+                        partition_key,
                         **{
                             "mcp_function_call_uuid": mcp_function_call[
                                 "mcpFunctionCallUuid"
@@ -338,13 +338,13 @@ def execute_decorator():
 
 
 def get_mcp_configuration_with_retry(
-    endpoint_id: str, max_retries: int = 1
+    partition_key: str, max_retries: int = 1
 ) -> Dict[str, Any] | Any:
     """
     Get MCP configuration with automatic retry on failure.
 
     Args:
-        endpoint_id: Endpoint ID to fetch configuration for
+        partition_key: Endpoint ID to fetch configuration for
         max_retries: Maximum number of retry attempts with cache refresh
 
     Returns:
@@ -357,20 +357,20 @@ def get_mcp_configuration_with_retry(
         try:
             force_refresh = attempt > 0  # Force refresh on retry attempts
             return Config.fetch_mcp_configuration(
-                endpoint_id, force_refresh=force_refresh
+                partition_key, force_refresh=force_refresh
             )
         except Exception as e:
             if attempt < max_retries:
                 Config.logger.warning(
-                    f"Failed to fetch MCP config for {endpoint_id} (attempt {attempt + 1}), "
+                    f"Failed to fetch MCP config for {partition_key} (attempt {attempt + 1}), "
                     f"retrying with cache refresh: {e}"
                 )
                 # Clear cache before retry
-                Config.clear_mcp_configuration_cache(endpoint_id)
+                Config.clear_mcp_configuration_cache(partition_key)
                 continue
             else:
                 Config.logger.error(
-                    f"Failed to fetch MCP config for {endpoint_id} after {max_retries + 1} attempts: {e}"
+                    f"Failed to fetch MCP config for {partition_key} after {max_retries + 1} attempts: {e}"
                 )
                 raise
 
@@ -520,13 +520,13 @@ def _validate_and_set_defaults(
 
 @execute_decorator()
 def execute_tool_function(
-    endpoint_id: str,
+    partition_key: str,
     name: str,
     arguments: Dict[str, Any],
     mcp_function_call_uuid: str = None,
 ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
     try:
-        config = get_mcp_configuration_with_retry(endpoint_id)
+        config = get_mcp_configuration_with_retry(partition_key)
         tool = next(
             (tool for tool in config["tools"] if tool["name"] == name),
             {},
@@ -571,8 +571,8 @@ def execute_tool_function(
         
         tool = tool_class(Config.logger, **Serializer.json_normalize(module["setting"]))
 
-        if hasattr(tool, "endpoint_id"):
-            tool.endpoint_id = endpoint_id
+        if hasattr(tool, "partition_key"):
+            tool.partition_key = partition_key
 
         tool_function = getattr(tool, module_link["function_name"])
 
@@ -679,11 +679,11 @@ def _create_embedded_resource_from_result(result) -> list[EmbeddedResource]:
 
 @execute_decorator()
 def execute_resource_function(
-    endpoint_id: str,
+    partition_key: str,
     uri: str,
 ) -> ReadResourceResult:
     try:
-        config = get_mcp_configuration_with_retry(endpoint_id)
+        config = get_mcp_configuration_with_retry(partition_key)
         resource = next(
             (resource for resource in config["resources"] if resource["uri"] == uri),
             {},
@@ -746,12 +746,12 @@ def execute_resource_function(
 
 @execute_decorator()
 def execute_prompt_function(
-    endpoint_id: str,
+    partition_key: str,
     name: str,
     arguments: Dict[str, Any],
 ) -> GetPromptResult:
     try:
-        config = get_mcp_configuration_with_retry(endpoint_id)
+        config = get_mcp_configuration_with_retry(partition_key)
         prompt = next(
             (prompt for prompt in config["prompts"] if prompt["name"] == name),
             {},
@@ -802,8 +802,8 @@ def execute_prompt_function(
             module_link["function_name"],
         )
 
-        if "endpoint_id" not in arguments:
-            arguments["endpoint_id"] = endpoint_id
+        if "partition_key" not in arguments:
+            arguments["partition_key"] = partition_key
 
         result = prompt_function(name, **arguments)
 
@@ -824,13 +824,13 @@ def execute_prompt_function(
 
 
 def async_execute_tool_function(
-    endpoint_id: str,
+    partition_key: str,
     name: str,
     arguments: Dict[str, Any],
 ):
     if arguments.get("mcp_function_call_uuid"):
         mcp_function_call = _check_existing_function_call(
-            endpoint_id, arguments["mcp_function_call_uuid"]
+            partition_key, arguments["mcp_function_call_uuid"]
         )
 
         if mcp_function_call["status"] == "completed":
@@ -860,7 +860,7 @@ def async_execute_tool_function(
 
     Config.logger.info("Making GraphQL call to insert/update MCP function")
     mcp_function_call = _insert_update_mcp_function_call(
-        endpoint_id,
+        partition_key,
         **{"name": name, "mcp_type": "tool", "arguments": arguments},
     )
     Config.logger.info("Successfully created MCP function call")
@@ -876,7 +876,7 @@ def async_execute_tool_function(
         Config.logger.info("Invoking Lambda function asynchronously")
         Invoker.invoke_funct_on_aws_lambda(
             Config.logger,
-            endpoint_id,
+            partition_key,
             "async_execute_tool_function",
             params=params,
             setting=Config.setting,
@@ -889,7 +889,7 @@ def async_execute_tool_function(
         thread = threading.Thread(
             target=execute_tool_function,
             args=(
-                endpoint_id,
+                partition_key,
                 name,
                 arguments,
             ),
@@ -913,7 +913,7 @@ def async_execute_tool_function(
     start_time = time.time()
     while time.time() - start_time <= 3:
         mcp_function_call = _check_existing_function_call(
-            endpoint_id, mcp_function_call["mcpFunctionCallUuid"]
+            partition_key, mcp_function_call["mcpFunctionCallUuid"]
         )
         if mcp_function_call["status"] == "completed":
             Config.logger.info(f"Tool function {name} completed. Returning result.")
@@ -925,7 +925,7 @@ def async_execute_tool_function(
             # Update the status to "in_process" if the current status is "initial"
             if mcp_function_call["status"] == "initial":
                 mcp_function_call = _insert_update_mcp_function_call(
-                    endpoint_id,
+                    partition_key,
                     **{
                         "mcp_function_call_uuid": mcp_function_call[
                             "mcpFunctionCallUuid"

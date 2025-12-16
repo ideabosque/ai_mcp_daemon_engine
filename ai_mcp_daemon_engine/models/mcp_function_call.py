@@ -90,28 +90,40 @@ def purge_cache():
         @functools.wraps(original_function)
         def wrapper_function(*args, **kwargs):
             try:
-                # Use cascading cache purging for mcp function calls
+                # Execute original function first
+                result = original_function(*args, **kwargs)
+
+                # Then purge cache after successful operation
                 from ..models.cache import purge_entity_cascading_cache
 
+                # Get entity keys from kwargs or entity parameter
+                entity_keys = {}
                 partition_key = args[0].context.get("partition_key") or kwargs.get(
                     "partition_key"
                 )
-                entity_keys = {}
-                if kwargs.get("mcp_function_call_uuid"):
+
+                # Try to get from entity parameter first (for updates)
+                entity = kwargs.get("entity")
+                if entity:
+                    entity_keys["mcp_function_call_uuid"] = getattr(
+                        entity, "mcp_function_call_uuid", None
+                    )
+
+                # Fallback to kwargs (for creates/deletes)
+                if not entity_keys.get("mcp_function_call_uuid"):
                     entity_keys["mcp_function_call_uuid"] = kwargs.get(
                         "mcp_function_call_uuid"
                     )
 
-                result = purge_entity_cascading_cache(
-                    args[0].context.get("logger"),
-                    entity_type="mcp_function_call",
-                    context_keys={"partition_key": partition_key} if partition_key else None,
-                    entity_keys=entity_keys if entity_keys else None,
-                    cascade_depth=3,
-                )
-
-                ## Original function.
-                result = original_function(*args, **kwargs)
+                # Only purge if we have the required keys
+                if entity_keys.get("mcp_function_call_uuid") and partition_key:
+                    purge_entity_cascading_cache(
+                        args[0].context.get("logger"),
+                        entity_type="mcp_function_call",
+                        context_keys={"partition_key": partition_key},
+                        entity_keys=entity_keys,
+                        cascade_depth=3,
+                    )
 
                 return result
             except Exception as e:
@@ -162,7 +174,9 @@ def get_mcp_function_call_type(
         if mcp_function_call_model.has_content:
             from ..handlers.config import Config
 
-            s3_key = f"mcp_content/{mcp_function_call_model.mcp_function_call_uuid}.json"
+            s3_key = (
+                f"mcp_content/{mcp_function_call_model.mcp_function_call_uuid}.json"
+            )
             try:
                 response = Config.aws_s3.get_object(
                     Bucket=Config.funct_bucket_name, Key=s3_key
@@ -174,7 +188,9 @@ def get_mcp_function_call_type(
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    mcp_function_call: Dict[str, Any] = mcp_function_call_model.__dict__["attribute_values"]
+    mcp_function_call: Dict[str, Any] = mcp_function_call_model.__dict__[
+        "attribute_values"
+    ]
     has_content = mcp_function_call.pop("has_content")
     if has_content:
         mcp_function_call["content"] = content
@@ -234,7 +250,6 @@ def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) 
     return inquiry_funct, count_funct, args
 
 
-@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "partition_key",
@@ -244,6 +259,7 @@ def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) 
     count_funct=get_mcp_function_call_count,
     type_funct=get_mcp_function_call_type,
 )
+@purge_cache()
 def insert_update_mcp_function_call(
     info: ResolveInfo, **kwargs: Dict[str, Any]
 ) -> None:
@@ -300,7 +316,6 @@ def insert_update_mcp_function_call(
     return
 
 
-@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "partition_key",
@@ -308,6 +323,7 @@ def insert_update_mcp_function_call(
     },
     model_funct=get_mcp_function_call,
 )
+@purge_cache()
 def delete_mcp_function_call(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
 
     kwargs["entity"].delete()

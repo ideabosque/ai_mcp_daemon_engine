@@ -9,10 +9,10 @@ import json
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict
+from typing import Any, AsyncGenerator, Dict, Tuple
 
 import pendulum
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, params
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -25,6 +25,14 @@ from .sse_manager import sse_manager
 
 # === Rate Limiting ===
 request_counts = defaultdict(list)
+
+
+def _get_partition_key(endpoint_id: str, request: Request) -> Tuple[str, str | None]:
+    """Construct partition key from endpoint_id and optional part_id"""
+    part_id = request.headers.get("Part-ID")
+    if part_id:
+        return f"{endpoint_id}#{part_id}", part_id
+    return endpoint_id, None
 
 
 # === Application Lifecycle Events ===
@@ -250,13 +258,14 @@ async def post_sse_message(
 
     message = None
     try:
+        partition_key, part_id = _get_partition_key(endpoint_id, request)
         message = await request.json()
 
         # Validate message structure
         if not isinstance(message, dict) or "method" not in message:
             raise HTTPException(status_code=400, detail="Invalid message format")
 
-        response = await process_mcp_message(endpoint_id, message)
+        response = await process_mcp_message(partition_key, message)
 
         # Send to user clients
         delivered = await send_to_user(
@@ -306,13 +315,15 @@ async def post_mcp_message(
 
     message = None
     try:
+        partition_key, part_id = _get_partition_key(endpoint_id, request)
+
         message = await request.json()
 
         # Validate message structure
         if not isinstance(message, dict):
             raise HTTPException(status_code=400, detail="Invalid message format")
 
-        response = await process_mcp_message(endpoint_id, message)
+        response = await process_mcp_message(partition_key, message)
         return jsonable_encoder(response)
 
     except json.JSONDecodeError:
@@ -355,7 +366,7 @@ async def get_metrics() -> Dict[str, Any]:
             ),
         },
         "mcp_cache": {
-            "cached_endpoints": list(Config.mcp_configuration.keys()),
+            "cached_partitions": list(Config.mcp_configuration.keys()),
             "cache_size": len(Config.mcp_configuration),
         },
     }
@@ -364,23 +375,25 @@ async def get_metrics() -> Dict[str, Any]:
 # === Admin Cache Management Endpoints ===
 @app.post("/{endpoint_id}/admin/cache/refresh")
 async def refresh_mcp_cache(
-    endpoint_id: str, user: Dict = Depends(current_user)
+    endpoint_id: str, request: Request, user: Dict = Depends(current_user)
 ) -> Dict[str, Any]:
     """Refresh MCP configuration cache for a specific endpoint"""
     # Validate endpoint_id
     if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid endpoint_id")
-
+        
     try:
+        partition_key, part_id = _get_partition_key(endpoint_id, request)
+
         # Force refresh the configuration
-        config = Config.refresh_mcp_configuration(endpoint_id)
+        config = Config.refresh_mcp_configuration(partition_key)
 
         return {
             "status": "success",
-            "message": f"Cache refreshed for endpoint: {endpoint_id}",
+            "message": f"Cache refreshed for partition: {partition_key}",
             "timestamp": pendulum.now("UTC").isoformat(),
             "cache_stats": {
-                "endpoint_id": endpoint_id,
+                "partition_key": partition_key,
                 "tools_count": len(config.get("tools", [])),
                 "resources_count": len(config.get("resources", [])),
                 "prompts_count": len(config.get("prompts", [])),
@@ -389,7 +402,7 @@ async def refresh_mcp_cache(
         }
     except Exception as e:
         if Config.logger:
-            Config.logger.error(f"Failed to refresh cache for {endpoint_id}: {e}")
+            Config.logger.error(f"Failed to refresh cache for {partition_key}: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to refresh cache: {str(e)}"
         )
@@ -397,18 +410,20 @@ async def refresh_mcp_cache(
 
 @app.delete("/{endpoint_id}/admin/cache")
 async def clear_endpoint_cache(
-    endpoint_id: str, user: Dict = Depends(current_user)
+    endpoint_id: str, request: Request, user: Dict = Depends(current_user)
 ) -> Dict[str, Any]:
     """Clear MCP configuration cache for a specific endpoint"""
     # Validate endpoint_id
     if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid endpoint_id")
 
-    Config.clear_mcp_configuration_cache(endpoint_id)
+    partition_key, part_id = _get_partition_key(endpoint_id, request)
+
+    Config.clear_mcp_configuration_cache(partition_key)
 
     return {
         "status": "success",
-        "message": f"Cache cleared for endpoint: {endpoint_id}",
+        "message": f"Cache cleared for partition: {partition_key}",
         "timestamp": pendulum.now("UTC").isoformat(),
     }
 
@@ -416,31 +431,33 @@ async def clear_endpoint_cache(
 @app.delete("/admin/cache")
 async def clear_all_cache(user: Dict = Depends(current_user)) -> Dict[str, Any]:
     """Clear MCP configuration cache for all endpoints"""
-    cached_endpoints = list(Config.mcp_configuration.keys())
+    cached_partitions = list(Config.mcp_configuration.keys())
     Config.clear_mcp_configuration_cache()
 
     return {
         "status": "success",
         "message": "All MCP configuration cache cleared",
         "timestamp": pendulum.now("UTC").isoformat(),
-        "cleared_endpoints": cached_endpoints,
+        "cleared_partitions": cached_partitions,
     }
 
 
 @app.get("/{endpoint_id}/admin/cache/status")
 async def get_cache_status(
-    endpoint_id: str, user: Dict = Depends(current_user)
+    endpoint_id: str, request: Request, user: Dict = Depends(current_user)
 ) -> Dict[str, Any]:
     """Get cache status for a specific endpoint"""
     # Validate endpoint_id
     if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid endpoint_id")
 
-    is_cached = endpoint_id in Config.mcp_configuration
-    config = Config.mcp_configuration.get(endpoint_id, {})
+    partition_key, part_id = _get_partition_key(endpoint_id, request)
+
+    is_cached = partition_key in Config.mcp_configuration
+    config = Config.mcp_configuration.get(partition_key, {})
 
     return {
-        "endpoint_id": endpoint_id,
+        "partition_key": partition_key,
         "is_cached": is_cached,
         "timestamp": pendulum.now("UTC").isoformat(),
         "cache_info": (
@@ -458,22 +475,24 @@ async def get_cache_status(
 
 
 @app.get("/{endpoint_id}")
-async def root(endpoint_id: str) -> Dict[str, Any]:
+async def root(endpoint_id: str, request: Request) -> Dict[str, Any]:
     """Get endpoint info including tools, resources and prompts"""
     # Validate endpoint_id
     if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid endpoint_id")
 
     try:
-        tools = await list_tools(endpoint_id)
-        resources = await list_resources(endpoint_id)
-        prompts = await list_prompts(endpoint_id)
+        partition_key, part_id = _get_partition_key(endpoint_id, request)
+
+        tools = await list_tools(partition_key)
+        resources = await list_resources(partition_key)
+        prompts = await list_prompts(partition_key)
         stats = await sse_manager.get_stats()
 
         return {
             "server": "MCP SSE Server",
             "version": "1.0.0",
-            "endpoint_id": endpoint_id,
+            "partition_key": partition_key,
             "sse_stats": stats,
             "tools": jsonable_encoder(tools),
             "resources": jsonable_encoder(resources),
@@ -490,15 +509,9 @@ async def root(endpoint_id: str) -> Dict[str, Any]:
 async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     """Handle GraphQL queries with automatic cache invalidation"""
     params = await request.json()
-    params.update({"endpoint_id": endpoint_id})
-
-    # Get Part_Id from headers if available
-    part_id = request.headers.get("Part-ID")
-    if part_id:
-        params["part_id"] = part_id
-        params["partition_key"] = f"{endpoint_id}#{part_id}"
-    else:
-        params["partition_key"] = endpoint_id
+    partition_key, part_id = _get_partition_key(endpoint_id, request)
+    params["part_id"] = part_id
+    params["partition_key"] = partition_key
 
     # Check if this is a mutation that modifies MCP configuration
     query = params.get("query", "")

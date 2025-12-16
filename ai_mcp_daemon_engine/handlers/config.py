@@ -15,7 +15,7 @@ import boto3
 from passlib.context import CryptContext
 from pydantic import AnyUrl
 
-from silvaengine_utility import Utility
+from silvaengine_utility.serializer import Serializer
 
 from ..models import utils
 
@@ -112,28 +112,28 @@ class Config:
             "model_class": "MCPFunctionModel",
             "getter": "get_mcp_function",
             "list_resolver": "ai_mcp_daemon_engine.queries.mcp_function.resolve_mcp_function_list",
-            "cache_keys": ["context:endpoint_id", "key:name"],
+            "cache_keys": ["context:partition_key", "key:name"],
         },
         "mcp_module": {
             "module": "ai_mcp_daemon_engine.models.mcp_module",
             "model_class": "MCPModuleModel",
             "getter": "get_mcp_module",
             "list_resolver": "ai_mcp_daemon_engine.queries.mcp_module.resolve_mcp_module_list",
-            "cache_keys": ["context:endpoint_id", "key:module_name"],
+            "cache_keys": ["context:partition_key", "key:module_name"],
         },
         "mcp_function_call": {
             "module": "ai_mcp_daemon_engine.models.mcp_function_call",
             "model_class": "MCPFunctionCallModel",
             "getter": "get_mcp_function_call",
             "list_resolver": "ai_mcp_daemon_engine.queries.mcp_function_call.resolve_mcp_function_call_list",
-            "cache_keys": ["context:endpoint_id", "key:mcp_function_call_uuid"],
+            "cache_keys": ["context:partition_key", "key:mcp_function_call_uuid"],
         },
         "mcp_setting": {
             "module": "ai_mcp_daemon_engine.models.mcp_setting",
             "model_class": "MCPSettingModel",
             "getter": "get_mcp_setting",
             "list_resolver": "ai_mcp_daemon_engine.queries.mcp_setting.resolve_mcp_setting_list",
-            "cache_keys": ["context:endpoint_id", "key:setting_id"],
+            "cache_keys": ["context:partition_key", "key:setting_id"],
         },
     }
 
@@ -353,14 +353,14 @@ class Config:
     @classmethod
     def fetch_mcp_configuration(
         cls,
-        endpoint_id: str,
+        partition_key: str,
         force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """
         Fetches and caches MCP configuration for a given endpoint.
 
         Args:
-            endpoint_id: ID of the endpoint to fetch configuration from
+            partition_key: ID of the endpoint to fetch configuration from
             force_refresh: If True, bypass cache and fetch fresh data
 
         Returns:
@@ -370,20 +370,20 @@ class Config:
             Exception: If GraphQL queries fail or data is malformed
         """
         # Check if configuration exists in cache and force_refresh is not requested
-        if not force_refresh and cls.mcp_configuration.get(endpoint_id) is not None:
-            return cls.mcp_configuration[endpoint_id]
+        if not force_refresh and cls.mcp_configuration.get(partition_key) is not None:
+            return cls.mcp_configuration[partition_key]
 
         if cls.logger:
-            cls.logger.info(f"Fetching MCP configuration for endpoint: {endpoint_id}")
+            cls.logger.info(f"Fetching MCP configuration for endpoint: {partition_key}")
 
         try:
             # Step 1: Fetch all MCP functions
             response = cls.mcp_core.mcp_core_graphql(
-                endpoint_id=endpoint_id,
+                partition_key=partition_key,
                 query=MCP_FUNCTION_LIST,
                 variables={},
             )
-            response = Utility.json_loads(response)
+            response = Serializer.json_loads(response)
 
             if "errors" in response:
                 cls.logger.error(
@@ -397,7 +397,7 @@ class Config:
                 .get("mcpFunctionList")
             ):
                 cls.logger.warning(
-                    f"No MCP functions found for endpoint: {endpoint_id}"
+                    f"No MCP functions found for endpoint: {partition_key}"
                 )
                 mcp_functions = []
             else:
@@ -434,16 +434,16 @@ class Config:
 
             # Step 4: Fetch module and setting information
             modules_info = cls._fetch_modules_and_settings(
-                endpoint_id, mcp_configuration["module_links"]
+                partition_key, mcp_configuration["module_links"]
             )
             mcp_configuration["modules"] = modules_info
 
             # Step 5: Cache the configuration
-            cls.mcp_configuration[endpoint_id] = mcp_configuration
+            cls.mcp_configuration[partition_key] = mcp_configuration
 
             if cls.logger:
                 cls.logger.info(
-                    f"Successfully cached MCP configuration for endpoint: {endpoint_id}"
+                    f"Successfully cached MCP configuration for endpoint: {partition_key}"
                 )
 
             return mcp_configuration
@@ -451,7 +451,7 @@ class Config:
         except Exception as e:
             if cls.logger:
                 cls.logger.error(
-                    f"Failed to fetch MCP configuration for {endpoint_id}: {e}"
+                    f"Failed to fetch MCP configuration for {partition_key}: {e}"
                 )
             raise
 
@@ -491,7 +491,7 @@ class Config:
 
     @classmethod
     def _fetch_modules_and_settings(
-        cls, endpoint_id: str, module_links: List[Dict[str, Any]]
+        cls, partition_key: str, module_links: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Fetch module and setting information efficiently."""
         modules_info = []
@@ -518,11 +518,11 @@ class Config:
             try:
                 # Fetch module information
                 module_response = cls.mcp_core.mcp_core_graphql(
-                    endpoint_id=endpoint_id,
+                    partition_key=partition_key,
                     query=MCP_MODULE,
                     variables={"moduleName": module_name},
                 )
-                module_response = Utility.json_loads(module_response)
+                module_response = Serializer.json_loads(module_response)
 
                 if "errors" in module_response:
                     if cls.logger:
@@ -570,11 +570,11 @@ class Config:
                 for class_name, class_info in class_to_setting_map.items():
                     try:
                         setting_response = cls.mcp_core.mcp_core_graphql(
-                            endpoint_id=endpoint_id,
+                            partition_key=partition_key,
                             query=MCP_SETTING,
                             variables={"settingId": class_info["setting_id"]},
                         )
-                        setting_response = Utility.json_loads(setting_response)
+                        setting_response = Serializer.json_loads(setting_response)
 
                         if "errors" in setting_response:
                             if cls.logger:
@@ -622,18 +622,18 @@ class Config:
         return modules_info
 
     @classmethod
-    def refresh_mcp_configuration(cls, endpoint_id: str) -> Dict[str, Any]:
+    def refresh_mcp_configuration(cls, partition_key: str) -> Dict[str, Any]:
         """Force refresh of MCP configuration for an endpoint."""
-        return cls.fetch_mcp_configuration(endpoint_id, force_refresh=True)
+        return cls.fetch_mcp_configuration(partition_key, force_refresh=True)
 
     @classmethod
-    def clear_mcp_configuration_cache(cls, endpoint_id: str = None):
+    def clear_mcp_configuration_cache(cls, partition_key: str = None):
         """Clear MCP configuration cache for specific endpoint or all endpoints."""
-        if endpoint_id:
-            cls.mcp_configuration.pop(endpoint_id, None)
+        if partition_key:
+            cls.mcp_configuration.pop(partition_key, None)
             if cls.logger:
                 cls.logger.info(
-                    f"Cleared MCP configuration cache for endpoint: {endpoint_id}"
+                    f"Cleared MCP configuration cache for endpoint: {partition_key}"
                 )
         else:
             cls.mcp_configuration.clear()

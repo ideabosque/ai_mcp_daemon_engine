@@ -49,26 +49,36 @@ def purge_cache():
         @functools.wraps(original_function)
         def wrapper_function(*args, **kwargs):
             try:
-                # Use cascading cache purging for mcp settings
+                # Execute original function first
+                result = original_function(*args, **kwargs)
+
+                # Then purge cache after successful operation
                 from ..models.cache import purge_entity_cascading_cache
 
+                # Get entity keys from kwargs or entity parameter
+                entity_keys = {}
                 partition_key = args[0].context.get("partition_key") or kwargs.get(
                     "partition_key"
                 )
-                entity_keys = {}
-                if kwargs.get("setting_id"):
+
+                # Try to get from entity parameter first (for updates)
+                entity = kwargs.get("entity")
+                if entity:
+                    entity_keys["setting_id"] = getattr(entity, "setting_id", None)
+
+                # Fallback to kwargs (for creates/deletes)
+                if not entity_keys.get("setting_id"):
                     entity_keys["setting_id"] = kwargs.get("setting_id")
 
-                result = purge_entity_cascading_cache(
-                    args[0].context.get("logger"),
-                    entity_type="mcp_setting",
-                    context_keys={"partition_key": partition_key} if partition_key else None,
-                    entity_keys=entity_keys if entity_keys else None,
-                    cascade_depth=3,
-                )
-
-                ## Original function.
-                result = original_function(*args, **kwargs)
+                # Only purge if we have the required keys
+                if entity_keys.get("setting_id") and partition_key:
+                    purge_entity_cascading_cache(
+                        args[0].context.get("logger"),
+                        entity_type="mcp_setting",
+                        context_keys={"partition_key": partition_key},
+                        entity_keys=entity_keys,
+                        cascade_depth=3,
+                    )
 
                 return result
             except Exception as e:
@@ -154,7 +164,6 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
     return inquiry_funct, count_funct, args
 
 
-@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "partition_key",
@@ -165,6 +174,7 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
     count_funct=get_mcp_setting_count,
     type_funct=get_mcp_setting_type,
 )
+@purge_cache()
 def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
 
     partition_key = kwargs.get("partition_key")
@@ -203,7 +213,6 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
     return
 
 
-@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "partition_key",
@@ -211,6 +220,7 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
     },
     model_funct=get_mcp_setting,
 )
+@purge_cache()
 def delete_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
 
     kwargs["entity"].delete()

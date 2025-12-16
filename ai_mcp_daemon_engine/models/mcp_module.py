@@ -69,47 +69,61 @@ def purge_cache():
         @functools.wraps(original_function)
         def wrapper_function(*args, **kwargs):
             try:
-                # Use cascading cache purging for mcp modules
+                # Execute original function first
+                result = original_function(*args, **kwargs)
+
+                # Then purge cache after successful operation
                 from ..models.cache import (
                     _extract_module_setting_ids,
                     purge_entity_cascading_cache,
                 )
 
+                # Get entity keys from kwargs or entity parameter
+                entity_keys = {}
                 partition_key = args[0].context.get("partition_key") or kwargs.get(
                     "partition_key"
                 )
-                entity_keys = {}
-                if kwargs.get("module_name"):
+
+                # Try to get from entity parameter first (for updates)
+                entity = kwargs.get("entity")
+                if entity:
+                    entity_keys["module_name"] = getattr(entity, "module_name", None)
+
+                # Fallback to kwargs (for creates/deletes)
+                if not entity_keys.get("module_name"):
                     entity_keys["module_name"] = kwargs.get("module_name")
 
-                result = purge_entity_cascading_cache(
-                    args[0].context.get("logger"),
-                    entity_type="mcp_module",
-                    context_keys={"partition_key": partition_key} if partition_key else None,
-                    entity_keys=entity_keys if entity_keys else None,
-                    cascade_depth=3,
-                )
+                # Only purge if we have the required keys
+                if entity_keys.get("module_name") and partition_key:
+                    purge_entity_cascading_cache(
+                        args[0].context.get("logger"),
+                        entity_type="mcp_module",
+                        context_keys={"partition_key": partition_key},
+                        entity_keys=entity_keys,
+                        cascade_depth=3,
+                    )
 
-                # Purge setting caches if module has classes with setting_ids
-                try:
-                    module = resolve_mcp_module(args[0], **kwargs)
-                    if module:
-                        setting_ids = _extract_module_setting_ids(module.classes)
-                        for setting_id in setting_ids:
-                            purge_entity_cascading_cache(
-                                args[0].context.get("logger"),
-                                entity_type="mcp_setting",
-                                context_keys={"partition_key": partition_key}
-                                if partition_key
-                                else None,
-                                entity_keys={"setting_id": setting_id},
-                                cascade_depth=3,
-                            )
-                except Exception:
-                    pass
+                    # Purge setting caches if module has classes with setting_ids
+                    try:
+                        # Extract setting_ids from entity or kwargs
+                        classes = None
+                        if entity:
+                            classes = getattr(entity, "classes", None)
+                        if not classes and "classes" in kwargs:
+                            classes = kwargs.get("classes")
 
-                ## Original function.
-                result = original_function(*args, **kwargs)
+                        if classes:
+                            setting_ids = _extract_module_setting_ids(classes)
+                            for setting_id in setting_ids:
+                                purge_entity_cascading_cache(
+                                    args[0].context.get("logger"),
+                                    entity_type="mcp_setting",
+                                    context_keys={"partition_key": partition_key},
+                                    entity_keys={"setting_id": setting_id},
+                                    cascade_depth=3,
+                                )
+                    except Exception:
+                        pass
 
                 return result
             except Exception as e:
@@ -144,7 +158,9 @@ def get_mcp_module(partition_key: str, module_name: str) -> MCPModuleModel:
 
 
 def get_mcp_module_count(partition_key: str, module_name: str) -> int:
-    return MCPModuleModel.count(partition_key, MCPModuleModel.module_name == module_name)
+    return MCPModuleModel.count(
+        partition_key, MCPModuleModel.module_name == module_name
+    )
 
 
 def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:
@@ -157,7 +173,9 @@ def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPMod
     return MCPModuleType(**Serializer.json_normalize(mcp_module))
 
 
-def resolve_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPModuleType | None:
+def resolve_mcp_module(
+    info: ResolveInfo, **kwargs: Dict[str, Any]
+) -> MCPModuleType | None:
     count = get_mcp_module_count(info.context["partition_key"], kwargs["module_name"])
     if count == 0:
         return None
@@ -197,7 +215,6 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     return inquiry_funct, count_funct, args
 
 
-@purge_cache()
 @insert_update_decorator(
     keys={
         "hash_key": "partition_key",
@@ -208,6 +225,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     count_funct=get_mcp_module_count,
     type_funct=get_mcp_module_type,
 )
+@purge_cache()
 def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
 
     partition_key = kwargs.get("partition_key")
@@ -254,7 +272,6 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     return
 
 
-@purge_cache()
 @delete_decorator(
     keys={
         "hash_key": "partition_key",
@@ -262,6 +279,7 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
     },
     model_funct=get_mcp_module,
 )
+@purge_cache()
 def delete_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
 
     kwargs["entity"].delete()
