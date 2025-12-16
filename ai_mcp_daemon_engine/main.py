@@ -121,8 +121,10 @@ class AIMCPDaemonEngine(object):
         ##<--Testing Data-->##
 
         endpoint_id = params.get("endpoint_id")
+        params["partition_key"] = f"{endpoint_id}"
         part_id = params.get("part_id")
-        params["partition_key"] = f"{endpoint_id}#{part_id}"
+        if part_id:
+            params["partition_key"] = f"{endpoint_id}#{part_id}"
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         self._apply_partition_defaults(params)
