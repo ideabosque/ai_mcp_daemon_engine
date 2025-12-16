@@ -25,7 +25,8 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility, method_cache
+from silvaengine_utility import method_cache
+from silvaengine_utility.serializer import Serializer
 
 from ..handlers.config import Config
 from ..types.mcp_setting import MCPSettingListType, MCPSettingType
@@ -35,7 +36,7 @@ class MCPSettingModel(BaseModel):
     class Meta(BaseModel.Meta):
         table_name = "mcp-settings"
 
-    endpoint_id = UnicodeAttribute(hash_key=True)
+    partition_key = UnicodeAttribute(hash_key=True)
     setting_id = UnicodeAttribute(range_key=True)
     setting = MapAttribute()
     updated_by = UnicodeAttribute()
@@ -51,8 +52,8 @@ def purge_cache():
                 # Use cascading cache purging for mcp settings
                 from ..models.cache import purge_entity_cascading_cache
 
-                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
-                    "endpoint_id"
+                partition_key = args[0].context.get("partition_key") or kwargs.get(
+                    "partition_key"
                 )
                 entity_keys = {}
                 if kwargs.get("setting_id"):
@@ -61,7 +62,7 @@ def purge_cache():
                 result = purge_entity_cascading_cache(
                     args[0].context.get("logger"),
                     entity_type="mcp_setting",
-                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    context_keys={"partition_key": partition_key} if partition_key else None,
                     entity_keys=entity_keys if entity_keys else None,
                     cascade_depth=3,
                 )
@@ -98,12 +99,12 @@ def create_mcp_setting_table(logger: logging.Logger) -> bool:
     ttl=Config.get_cache_ttl(),
     cache_name=Config.get_cache_name("models", "mcp_setting"),
 )
-def get_mcp_setting(endpoint_id: str, setting_id: str) -> MCPSettingModel:
-    return MCPSettingModel.get(endpoint_id, setting_id)
+def get_mcp_setting(partition_key: str, setting_id: str) -> MCPSettingModel:
+    return MCPSettingModel.get(partition_key, setting_id)
 
 
-def get_mcp_setting_count(endpoint_id: str, setting_id: str) -> int:
-    return MCPSettingModel.count(endpoint_id, MCPSettingModel.setting_id == setting_id)
+def get_mcp_setting_count(partition_key: str, setting_id: str) -> int:
+    return MCPSettingModel.count(partition_key, MCPSettingModel.setting_id == setting_id)
 
 
 def get_mcp_setting_type(
@@ -115,34 +116,34 @@ def get_mcp_setting_type(
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPSettingType(**Utility.json_normalize(mcp_setting))
+    return MCPSettingType(**Serializer.json_normalize(mcp_setting))
 
 
 def resolve_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPSettingType | None:
-    count = get_mcp_setting_count(info.context["endpoint_id"], kwargs["setting_id"])
+    count = get_mcp_setting_count(info.context["partition_key"], kwargs["setting_id"])
     if count == 0:
         return None
 
     return get_mcp_setting_type(
-        info, get_mcp_setting(info.context["endpoint_id"], kwargs["setting_id"])
+        info, get_mcp_setting(info.context["partition_key"], kwargs["setting_id"])
     )
 
 
 @monitor_decorator
 @resolve_list_decorator(
-    attributes_to_get=["endpoint_id", "setting_id"],
+    attributes_to_get=["partition_key", "setting_id"],
     list_type_class=MCPSettingListType,
     type_funct=get_mcp_setting_type,
 )
 def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
-    endpoint_id = info.context["endpoint_id"]
+    partition_key = info.context["partition_key"]
     setting_id = kwargs.get("setting_id")
 
     args = []
     inquiry_funct = MCPSettingModel.scan
     count_funct = MCPSettingModel.count
-    if endpoint_id:
-        args = [endpoint_id, None]
+    if partition_key:
+        args = [partition_key, None]
         inquiry_funct = MCPSettingModel.query
     the_filters = None
     if setting_id:
@@ -156,7 +157,7 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
 @purge_cache()
 @insert_update_decorator(
     keys={
-        "hash_key": "endpoint_id",
+        "hash_key": "partition_key",
         "range_key": "setting_id",
     },
     range_key_required=False,
@@ -166,7 +167,7 @@ def resolve_mcp_setting_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any
 )
 def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
 
-    endpoint_id = kwargs.get("endpoint_id")
+    partition_key = kwargs.get("partition_key")
     setting_id = kwargs.get("setting_id")
 
     if kwargs.get("entity") is None:
@@ -178,7 +179,7 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
         }
 
         MCPSettingModel(
-            endpoint_id,
+            partition_key,
             setting_id,
             **cols,
         ).save()
@@ -205,7 +206,7 @@ def insert_update_mcp_setting(info: ResolveInfo, **kwargs: Dict[str, Any]) -> No
 @purge_cache()
 @delete_decorator(
     keys={
-        "hash_key": "endpoint_id",
+        "hash_key": "partition_key",
         "range_key": "setting_id",
     },
     model_funct=get_mcp_setting,

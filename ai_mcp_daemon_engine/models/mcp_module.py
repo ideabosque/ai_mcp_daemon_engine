@@ -27,7 +27,8 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility, method_cache
+from silvaengine_utility import method_cache
+from silvaengine_utility.serializer import Serializer
 
 from ..handlers.config import Config
 from ..types.mcp_module import MCPModuleListType, MCPModuleType
@@ -44,7 +45,7 @@ class MCPPackgeIndex(LocalSecondaryIndex):
         projection = AllProjection()
         index_name = "package_name-index"
 
-    endpoint_id = UnicodeAttribute(hash_key=True)
+    partition_key = UnicodeAttribute(hash_key=True)
     package_name = UnicodeAttribute(range_key=True)
 
 
@@ -52,7 +53,7 @@ class MCPModuleModel(BaseModel):
     class Meta(BaseModel.Meta):
         table_name = "mcp-modules"
 
-    endpoint_id = UnicodeAttribute(hash_key=True)
+    partition_key = UnicodeAttribute(hash_key=True)
     module_name = UnicodeAttribute(range_key=True)
     package_name = UnicodeAttribute()
     classes = ListAttribute(of=MapAttribute)
@@ -74,8 +75,8 @@ def purge_cache():
                     purge_entity_cascading_cache,
                 )
 
-                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
-                    "endpoint_id"
+                partition_key = args[0].context.get("partition_key") or kwargs.get(
+                    "partition_key"
                 )
                 entity_keys = {}
                 if kwargs.get("module_name"):
@@ -84,7 +85,7 @@ def purge_cache():
                 result = purge_entity_cascading_cache(
                     args[0].context.get("logger"),
                     entity_type="mcp_module",
-                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    context_keys={"partition_key": partition_key} if partition_key else None,
                     entity_keys=entity_keys if entity_keys else None,
                     cascade_depth=3,
                 )
@@ -98,8 +99,8 @@ def purge_cache():
                             purge_entity_cascading_cache(
                                 args[0].context.get("logger"),
                                 entity_type="mcp_setting",
-                                context_keys={"endpoint_id": endpoint_id}
-                                if endpoint_id
+                                context_keys={"partition_key": partition_key}
+                                if partition_key
                                 else None,
                                 entity_keys={"setting_id": setting_id},
                                 cascade_depth=3,
@@ -138,12 +139,12 @@ def create_mcp_module_table(logger: logging.Logger) -> bool:
 @method_cache(
     ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name("models", "mcp_module")
 )
-def get_mcp_module(endpoint_id: str, module_name: str) -> MCPModuleModel:
-    return MCPModuleModel.get(endpoint_id, module_name)
+def get_mcp_module(partition_key: str, module_name: str) -> MCPModuleModel:
+    return MCPModuleModel.get(partition_key, module_name)
 
 
-def get_mcp_module_count(endpoint_id: str, module_name: str) -> int:
-    return MCPModuleModel.count(endpoint_id, MCPModuleModel.module_name == module_name)
+def get_mcp_module_count(partition_key: str, module_name: str) -> int:
+    return MCPModuleModel.count(partition_key, MCPModuleModel.module_name == module_name)
 
 
 def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPModuleType:
@@ -153,35 +154,35 @@ def get_mcp_module_type(info: ResolveInfo, mcp_module: MCPModuleModel) -> MCPMod
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPModuleType(**Utility.json_normalize(mcp_module))
+    return MCPModuleType(**Serializer.json_normalize(mcp_module))
 
 
 def resolve_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> MCPModuleType | None:
-    count = get_mcp_module_count(info.context["endpoint_id"], kwargs["module_name"])
+    count = get_mcp_module_count(info.context["partition_key"], kwargs["module_name"])
     if count == 0:
         return None
 
     return get_mcp_module_type(
-        info, get_mcp_module(info.context["endpoint_id"], kwargs["module_name"])
+        info, get_mcp_module(info.context["partition_key"], kwargs["module_name"])
     )
 
 
 @monitor_decorator
 @resolve_list_decorator(
-    attributes_to_get=["endpoint_id", "module_name", "package_name"],
+    attributes_to_get=["partition_key", "module_name", "package_name"],
     list_type_class=MCPModuleListType,
     type_funct=get_mcp_module_type,
 )
 def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
-    endpoint_id = info.context["endpoint_id"]
+    partition_key = info.context["partition_key"]
     package_name = kwargs.get("package_name")
     module_name = kwargs.get("module_name")
 
     args = []
     inquiry_funct = MCPModuleModel.scan
     count_funct = MCPModuleModel.count
-    if endpoint_id:
-        args = [endpoint_id, None]
+    if partition_key:
+        args = [partition_key, None]
         inquiry_funct = MCPModuleModel.query
         if package_name:
             inquiry_funct = MCPModuleModel.mcp_package_index.query
@@ -199,7 +200,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
 @purge_cache()
 @insert_update_decorator(
     keys={
-        "hash_key": "endpoint_id",
+        "hash_key": "partition_key",
         "range_key": "module_name",
     },
     range_key_required=True,
@@ -209,7 +210,7 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
 )
 def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
 
-    endpoint_id = kwargs.get("endpoint_id")
+    partition_key = kwargs.get("partition_key")
     module_name = kwargs.get("module_name")
 
     if kwargs.get("entity") is None:
@@ -227,7 +228,7 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
                 cols[key] = kwargs[key]
 
         MCPModuleModel(
-            endpoint_id,
+            partition_key,
             module_name,
             **cols,
         ).save()
@@ -256,7 +257,7 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
 @purge_cache()
 @delete_decorator(
     keys={
-        "hash_key": "endpoint_id",
+        "hash_key": "partition_key",
         "range_key": "module_name",
     },
     model_funct=get_mcp_module,

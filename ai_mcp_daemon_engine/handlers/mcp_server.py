@@ -6,7 +6,7 @@ __author__ = "bibow"
 
 import logging
 import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Sequence
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -21,7 +21,6 @@ from mcp.types import (
     Tool,
 )
 
-from .config import Config
 from .mcp_utility import (
     async_execute_tool_function,
     execute_prompt_function,
@@ -35,23 +34,23 @@ server = Server("MCP SSE Server")
 
 # === Tool Definitions ===
 @server.list_tools()
-async def list_tools(endpoint_id: str = "default") -> List[Tool]:
+async def list_tools(partition_key: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(endpoint_id)
+    config = get_mcp_configuration_with_retry(partition_key)
     tools = config["tools"]
     return [Tool(**tool) for tool in tools]
 
 
 @server.call_tool()
 async def call_tool(
-    name: str, arguments: Optional[Dict[str, Any]], endpoint_id: str = "default"
-) -> List[Union[TextContent, ImageContent, EmbeddedResource]]:
+    name: str, arguments: Optional[Dict[str, Any]], partition_key: str = "default"
+) -> Sequence[Union[TextContent, ImageContent, EmbeddedResource]]:
     """Call a specific tool with given arguments"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(endpoint_id)
+    config = get_mcp_configuration_with_retry(partition_key)
     tools = config["tools"]
     if not any(tool["name"] == name for tool in tools):
         raise ValueError(f"Unknown tool: {name}")
@@ -65,45 +64,45 @@ async def call_tool(
         {},
     )
     if module_link.get("is_async", False):
-        if endpoint_id == "default":
+        if partition_key == "default":
             raise ValueError(
-                "Async tools are not supported with default endpoint_id - please provide a specific endpoint_id"
+                "Async tools are not supported with default partition_key - please provide a specific partition_key"
             )
-        return async_execute_tool_function(endpoint_id, name, arguments)
+        return async_execute_tool_function(partition_key, name, arguments)
 
-    return execute_tool_function(endpoint_id, name, arguments)
+    return execute_tool_function(partition_key, name, arguments)
 
 
 @server.list_resources()
-async def list_resources(endpoint_id: str = "default") -> List[Resource]:
+async def list_resources(partition_key: str = "default") -> List[Resource]:
     """List available resources for the given endpoint"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(endpoint_id)
+    config = get_mcp_configuration_with_retry(partition_key)
     resources = config["resources"]
 
     return [Resource(**resource) for resource in resources]
 
 
 @server.read_resource()
-async def read_resource(uri: str, endpoint_id: str = "default") -> str:
+async def read_resource(uri: str, partition_key: str = "default") -> Any:
     """Read content of a specific resource"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(endpoint_id)
+    config = get_mcp_configuration_with_retry(partition_key)
     resources = config["resources"]
     if not any(resource["uri"] == uri for resource in resources):
         raise ValueError(f"Unknown resource: {uri}")
 
-    return execute_resource_function(endpoint_id, uri)
+    return execute_resource_function(partition_key, uri)
 
 
 @server.list_prompts()
-async def list_prompts(endpoint_id: str = "default") -> List[Prompt]:
+async def list_prompts(partition_key: str = "default") -> List[Prompt]:
     """List available prompts for the given endpoint"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(endpoint_id)
+    config = get_mcp_configuration_with_retry(partition_key)
     prompts = config["prompts"]
 
     return [
@@ -118,21 +117,21 @@ async def list_prompts(endpoint_id: str = "default") -> List[Prompt]:
 
 @server.get_prompt()
 async def get_prompt(
-    name: str, arguments: Optional[Dict[str, Any]], endpoint_id: str = "default"
+    name: str, arguments: Optional[Dict[str, Any]], partition_key: str = "default"
 ) -> GetPromptResult:
     """Get a specific prompt with given arguments"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(endpoint_id)
+    config = get_mcp_configuration_with_retry(partition_key)
     prompts = config["prompts"]
     if not any(prompt["name"] == name for prompt in prompts):
         raise ValueError(f"Unknown prompt: {name}")
 
-    return execute_prompt_function(endpoint_id, name, arguments)
+    return execute_prompt_function(partition_key, name, arguments)
 
 
 # === MCP Message Handling ===
-async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
+async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
     """Process incoming MCP messages"""
     try:
         method = message.get("method")
@@ -155,7 +154,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             }
 
         elif method == "tools/list":
-            tools = await list_tools(endpoint_id=endpoint_id)
+            tools = await list_tools(partition_key=partition_key)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -173,7 +172,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
 
         elif method == "tools/call":
             result = await call_tool(
-                params["name"], params.get("arguments"), endpoint_id=endpoint_id
+                params["name"], params.get("arguments"), partition_key=partition_key
             )
             # Convert content objects to dictionaries for JSON serialization
             serialized_content = []
@@ -214,7 +213,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             }
 
         elif method == "resources/list":
-            resources = await list_resources(endpoint_id=endpoint_id)
+            resources = await list_resources(partition_key=partition_key)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -239,7 +238,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
             }
 
         elif method == "resources/read":
-            content = await read_resource(params["uri"], endpoint_id=endpoint_id)
+            content = await read_resource(params["uri"], partition_key=partition_key)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -258,7 +257,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
         # Handle MCP protocol messages
         elif method == "prompts/list":
             # Handle list prompts request
-            prompts = await list_prompts(endpoint_id=endpoint_id)
+            prompts = await list_prompts(partition_key=partition_key)
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -284,7 +283,7 @@ async def process_mcp_message(endpoint_id: str, message: Dict) -> Dict:
         elif method == "prompts/get":
             # Handle get prompt request
             result = await get_prompt(
-                params["name"], params.get("arguments"), endpoint_id=endpoint_id
+                params["name"], params.get("arguments"), partition_key=partition_key
             )
             # Serialize messages with proper content serialization
             serialized_messages = []

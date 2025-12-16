@@ -17,7 +17,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from silvaengine_utility import Utility
+from silvaengine_utility.serializer import Serializer
 
 from .config import Config
 from .mcp_server import list_prompts, list_resources, list_tools, process_mcp_message
@@ -492,6 +492,14 @@ async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     params = await request.json()
     params.update({"endpoint_id": endpoint_id})
 
+    # Get Part_Id from headers if available
+    part_id = request.headers.get("Part-ID")
+    if part_id:
+        params["part_id"] = part_id
+        params["partition_key"] = f"{endpoint_id}#{part_id}"
+    else:
+        params["partition_key"] = endpoint_id
+
     # Check if this is a mutation that modifies MCP configuration
     query = params.get("query", "")
     is_config_mutation = any(
@@ -507,7 +515,7 @@ async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     )
 
     # Execute the GraphQL query
-    result = Utility.json_loads(Config.mcp_core.mcp_core_graphql(**params))
+    result = Serializer.json_loads(Config.mcp_core.mcp_core_graphql(**params))
 
     # If it was a successful configuration mutation, clear the cache
     if is_config_mutation and "errors" not in result:

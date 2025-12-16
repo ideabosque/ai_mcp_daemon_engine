@@ -22,7 +22,7 @@ def load_mcp_configuration_into_models(
         kwargs (Dict[str, Any]): Dictionary containing:
             - mcp_configuration: Complete MCP configuration dictionary
             - updated_by: User identifier for update tracking
-            - endpoint_id: Endpoint ID to load configuration for (from info.context)
+            - partition_key: Endpoint ID to load configuration for (from info.context)
 
     Returns:
         Dict[str, Any]: Dictionary with statistics about loaded items containing:
@@ -41,9 +41,9 @@ def load_mcp_configuration_into_models(
         from ..models.mcp_setting import insert_update_mcp_setting
         from .mcp_utility import get_mcp_configuration_by_module
 
-        endpoint_id = info.context["endpoint_id"]
+        partition_key = info.context["partition_key"]
         info.context["logger"].info(
-            f"Loading MCP configuration for endpoint: {endpoint_id}"
+            f"Loading MCP configuration for endpoint: {partition_key}"
         )
         updated_by = kwargs["updated_by"]
 
@@ -72,7 +72,7 @@ def load_mcp_configuration_into_models(
             )
             for tool in mcp_configuration["tools"]:
                 tool_data = {
-                    "endpoint_id": endpoint_id,
+                    "partition_key": partition_key,
                     "name": tool.get("name"),
                     "mcp_type": "tool",
                     "description": tool.get("description"),
@@ -98,7 +98,7 @@ def load_mcp_configuration_into_models(
             )
             for resource in mcp_configuration["resources"]:
                 resource_data = {
-                    "endpoint_id": endpoint_id,
+                    "partition_key": partition_key,
                     "name": resource.get("name"),
                     "mcp_type": "resource",
                     "description": resource.get("description"),
@@ -121,7 +121,7 @@ def load_mcp_configuration_into_models(
             )
             for prompt in mcp_configuration["prompts"]:
                 prompt_data = {
-                    "endpoint_id": endpoint_id,
+                    "partition_key": partition_key,
                     "name": prompt.get("name"),
                     "mcp_type": "prompt",
                     "description": prompt.get("description"),
@@ -145,7 +145,7 @@ def load_mcp_configuration_into_models(
             for link in mcp_configuration["module_links"]:
                 # Only update the module-related fields, don't overwrite existing data
                 link_data = {
-                    "endpoint_id": endpoint_id,
+                    "partition_key": partition_key,
                     "name": link.get("name"),
                     "mcp_type": link.get("type", "tool"),
                     "module_name": link.get("module_name"),
@@ -166,7 +166,7 @@ def load_mcp_configuration_into_models(
 
             # Aggregate all settings from all modules and create one shared setting
             setting_insert_data = {
-                "endpoint_id": endpoint_id,
+                "partition_key": partition_key,
                 "setting": {},
                 "updated_by": updated_by,
             }
@@ -202,7 +202,7 @@ def load_mcp_configuration_into_models(
                 ]
 
                 module_data = {
-                    "endpoint_id": endpoint_id,
+                    "partition_key": partition_key,
                     "module_name": module.get("module_name"),
                     "package_name": module.get(
                         "package_name", module.get("module_name")

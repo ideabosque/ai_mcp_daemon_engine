@@ -27,7 +27,8 @@ from silvaengine_dynamodb_base import (
     monitor_decorator,
     resolve_list_decorator,
 )
-from silvaengine_utility import Utility, method_cache
+from silvaengine_utility import method_cache
+from silvaengine_utility.serializer import Serializer
 
 from ..handlers.config import Config
 from ..types.mcp_function import MCPFunctionListType, MCPFunctionType
@@ -44,7 +45,7 @@ class MCPTypeIndex(LocalSecondaryIndex):
         projection = AllProjection()
         index_name = "mcp_type-index"
 
-    endpoint_id = UnicodeAttribute(hash_key=True)
+    partition_key = UnicodeAttribute(hash_key=True)
     mcp_type = UnicodeAttribute(range_key=True)
 
 
@@ -52,7 +53,7 @@ class MCPFunctionModel(BaseModel):
     class Meta(BaseModel.Meta):
         table_name = "mcp-functions"
 
-    endpoint_id = UnicodeAttribute(hash_key=True)
+    partition_key = UnicodeAttribute(hash_key=True)
     name = UnicodeAttribute(range_key=True)
     mcp_type = UnicodeAttribute()
     description = UnicodeAttribute(null=True)
@@ -77,8 +78,8 @@ def purge_cache():
                 # Use cascading cache purging for mcp functions
                 from ..models.cache import purge_entity_cascading_cache
 
-                endpoint_id = args[0].context.get("endpoint_id") or kwargs.get(
-                    "endpoint_id"
+                partition_key = args[0].context.get("partition_key") or kwargs.get(
+                    "partition_key"
                 )
                 entity_keys = {}
                 if kwargs.get("name"):
@@ -87,7 +88,7 @@ def purge_cache():
                 result = purge_entity_cascading_cache(
                     args[0].context.get("logger"),
                     entity_type="mcp_function",
-                    context_keys={"endpoint_id": endpoint_id} if endpoint_id else None,
+                    context_keys={"partition_key": partition_key} if partition_key else None,
                     entity_keys=entity_keys if entity_keys else None,
                     cascade_depth=3,
                 )
@@ -124,12 +125,12 @@ def create_mcp_function_table(logger: logging.Logger) -> bool:
     ttl=Config.get_cache_ttl(),
     cache_name=Config.get_cache_name("models", "mcp_function"),
 )
-def get_mcp_function(endpoint_id: str, name: str) -> MCPFunctionModel:
-    return MCPFunctionModel.get(endpoint_id, name)
+def get_mcp_function(partition_key: str, name: str) -> MCPFunctionModel:
+    return MCPFunctionModel.get(partition_key, name)
 
 
-def get_mcp_function_count(endpoint_id: str, name: str) -> int:
-    return MCPFunctionModel.count(endpoint_id, MCPFunctionModel.name == name)
+def get_mcp_function_count(partition_key: str, name: str) -> int:
+    return MCPFunctionModel.count(partition_key, MCPFunctionModel.name == name)
 
 
 def get_mcp_function_type(
@@ -141,29 +142,29 @@ def get_mcp_function_type(
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-    return MCPFunctionType(**Utility.json_normalize(mcp_function))
+    return MCPFunctionType(**Serializer.json_normalize(mcp_function))
 
 
 def resolve_mcp_function(
     info: ResolveInfo, **kwargs: Dict[str, Any]
 ) -> MCPFunctionType | None:
-    count = get_mcp_function_count(info.context["endpoint_id"], kwargs["name"])
+    count = get_mcp_function_count(info.context["partition_key"], kwargs["name"])
     if count == 0:
         return None
 
     return get_mcp_function_type(
-        info, get_mcp_function(info.context["endpoint_id"], kwargs["name"])
+        info, get_mcp_function(info.context["partition_key"], kwargs["name"])
     )
 
 
 @monitor_decorator
 @resolve_list_decorator(
-    attributes_to_get=["endpoint_id", "name", "type"],
+    attributes_to_get=["partition_key", "name", "type"],
     list_type_class=MCPFunctionListType,
     type_funct=get_mcp_function_type,
 )
 def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
-    endpoint_id = info.context["endpoint_id"]
+    partition_key = info.context["partition_key"]
     mcp_type = kwargs.get("mcp_type")
     description = kwargs.get("description")
     module_name = kwargs.get("module_name")
@@ -173,8 +174,8 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
     args = []
     inquiry_funct = MCPFunctionModel.scan
     count_funct = MCPFunctionModel.count
-    if endpoint_id:
-        args = [endpoint_id, None]
+    if partition_key:
+        args = [partition_key, None]
         inquiry_funct = MCPFunctionModel.query
         if mcp_type:
             inquiry_funct = MCPFunctionModel.mcp_type_index.query
@@ -198,7 +199,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
 @purge_cache()
 @insert_update_decorator(
     keys={
-        "hash_key": "endpoint_id",
+        "hash_key": "partition_key",
         "range_key": "name",
     },
     range_key_required=True,
@@ -208,7 +209,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
 )
 def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
 
-    endpoint_id = kwargs.get("endpoint_id")
+    partition_key = kwargs.get("partition_key")
     name = kwargs.get("name")
 
     if kwargs.get("entity") is None:
@@ -232,7 +233,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
                 cols[key] = kwargs[key]
 
         MCPFunctionModel(
-            endpoint_id,
+            partition_key,
             name,
             **cols,
         ).save()
@@ -267,7 +268,7 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
 @purge_cache()
 @delete_decorator(
     keys={
-        "hash_key": "endpoint_id",
+        "hash_key": "partition_key",
         "range_key": "name",
     },
     model_funct=get_mcp_function,

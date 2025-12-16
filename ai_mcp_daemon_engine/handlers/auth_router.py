@@ -74,6 +74,8 @@ def secret_hash(username: str) -> str:
     """
     Cognito expects:  Base64( HMAC-SHA256( key=client_secret, msg=username+client_id ) )
     """
+    if not Config.cognito_app_client_id or not Config.cognito_app_secret:
+        raise ValueError("Cognito app client ID and secret must be configured")
     message = (username + Config.cognito_app_client_id).encode("utf-8")
     key = Config.cognito_app_secret.encode("utf-8")
     digest = hmac.new(key, message, hashlib.sha256).digest()

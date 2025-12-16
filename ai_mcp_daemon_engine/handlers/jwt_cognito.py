@@ -42,7 +42,8 @@ async def _jwks() -> Dict[str, Any]:
         resp = await client.get(Config.jwks_endpoint)
         resp.raise_for_status()
         _JWKS_CACHE = resp.json()
-        _JWKS_EXPIRES_AT = now + Config.jwks_cache_ttl
+        _JWKS_EXPIRES_AT = now + (Config.jwks_cache_ttl or 3600)
+    assert _JWKS_CACHE is not None
     return _JWKS_CACHE
 
 

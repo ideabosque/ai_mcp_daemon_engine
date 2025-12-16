@@ -14,7 +14,7 @@ import time
 import traceback
 import zipfile
 import pendulum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 from mcp.types import (
     EmbeddedResource,
@@ -26,7 +26,8 @@ from mcp.types import (
     TextResourceContents,
 )
 
-from silvaengine_utility import Utility
+from silvaengine_utility.serializer import Serializer
+from silvaengine_utility.invoker import Invoker
 
 from .config import Config
 
@@ -141,7 +142,7 @@ def _check_existing_function_call(
             },
         }
     )
-    response = Utility.json_loads(response)
+    response = Serializer.json_loads(response)
 
     if "errors" in response:
         Config.logger.error(f"GraphQL error: {response['errors']}")
@@ -163,7 +164,7 @@ def _insert_update_mcp_function_call(
 
         # Save content to S3 if it exists
         content_json = (
-            Utility.json_dumps(kwargs["content"]) if kwargs.get("content") else None
+            Serializer.json_dumps(kwargs["content"]) if kwargs.get("content") else None
         )
         if content_json is not None:
             s3_key = f"mcp_content/{kwargs['mcp_function_call_uuid']}.json"
@@ -192,7 +193,7 @@ def _insert_update_mcp_function_call(
                 "variables": {
                     "name": kwargs["name"],
                     "mcpType": kwargs["mcp_type"],
-                    "arguments": Utility.json_normalize(
+                    "arguments": Serializer.json_normalize(
                         kwargs["arguments"], parser_number=False
                     ),
                     "updatedBy": "mcp_daemon_engine",
@@ -200,7 +201,7 @@ def _insert_update_mcp_function_call(
             }
         )
 
-    response = Utility.json_loads(response)
+    response = Serializer.json_loads(response)
 
     if "errors" in response:
         Config.logger.error(f"GraphQL error: {response['errors']}")
@@ -247,6 +248,10 @@ def execute_decorator():
                             ),
                             None,
                         )
+
+                        if resource is None:
+                            raise Exception(f"Resource not found for URI: {args[1]}")
+
                         name = resource["name"]
                         arguments = {"uri": args[1]}
                         Config.logger.info(
@@ -334,7 +339,7 @@ def execute_decorator():
 
 def get_mcp_configuration_with_retry(
     endpoint_id: str, max_retries: int = 1
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | Any:
     """
     Get MCP configuration with automatic retry on failure.
 
@@ -519,7 +524,7 @@ def execute_tool_function(
     name: str,
     arguments: Dict[str, Any],
     mcp_function_call_uuid: str = None,
-) -> list[TextContent | ImageContent | EmbeddedResource]:
+) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
     try:
         config = get_mcp_configuration_with_retry(endpoint_id)
         tool = next(
@@ -560,7 +565,11 @@ def execute_tool_function(
             module["class_name"],
             source=module.get("source"),
         )
-        tool = tool_class(Config.logger, **Utility.json_normalize(module["setting"]))
+        
+        if tool_class is None:
+            raise Exception(f"Failed to load tool class: {module['class_name']}")
+        
+        tool = tool_class(Config.logger, **Serializer.json_normalize(module["setting"]))
 
         if hasattr(tool, "endpoint_id"):
             tool.endpoint_id = endpoint_id
@@ -582,7 +591,7 @@ def execute_tool_function(
         if return_type == "text":
             # Handle dict result by converting to JSON representation
             if isinstance(result, dict):
-                return [TextContent(type="text", text=Utility.json_dumps(result))]
+                return [TextContent(type="text", text=Serializer.json_dumps(result))]
             return [TextContent(type="text", text=str(result))]
 
         elif return_type == "image":
@@ -645,14 +654,14 @@ def _create_embedded_resource_from_result(result) -> list[EmbeddedResource]:
         # Auto-detect JSON if no mimeType provided
         if not mime_type:
             try:
-                Utility.json_loads(text_content)
+                Serializer.json_loads(text_content)
                 mime_type = "application/json"
             except:
                 mime_type = "text/plain"
     else:
         # Convert to JSON string (for dicts) or plain string
         if isinstance(resource_data, dict):
-            text_content = Utility.json_dumps(resource_data)
+            text_content = Serializer.json_dumps(resource_data)
             mime_type = resource_data.get("mimeType", "application/json")
         else:
             text_content = str(resource_data)
@@ -709,10 +718,13 @@ def execute_resource_function(
             source=module.get("source"),
         )
 
+        if resource_class is None:
+            raise Exception(f"Failed to load resource class: {module['class_name']}")
+
         resource_function = getattr(
             resource_class(
                 Config.logger,
-                **Utility.json_normalize(module["setting"]),
+                **Serializer.json_normalize(module["setting"]),
             ),
             module_link["function_name"],
         )
@@ -779,10 +791,13 @@ def execute_prompt_function(
             source=module.get("source"),
         )
 
+        if prompt_class is None:
+            raise Exception(f"Failed to load prompt class: {module['class_name']}")
+
         prompt_function = getattr(
             prompt_class(
                 Config.logger,
-                **Utility.json_normalize(module["setting"]),
+                **Serializer.json_normalize(module["setting"]),
             ),
             module_link["function_name"],
         )
@@ -829,7 +844,7 @@ def async_execute_tool_function(
                     type="resource",
                     resource=TextResourceContents(
                         uri=f"mcp://function-call/{mcp_function_call['mcpFunctionCallUuid']}",
-                        text=Utility.json_dumps(
+                        text=Serializer.json_dumps(
                             {
                                 "mcp_function_call_uuid": mcp_function_call[
                                     "mcpFunctionCallUuid"
@@ -859,7 +874,7 @@ def async_execute_tool_function(
     if Config.aws_lambda:
         # Invoke Lambda function asynchronously
         Config.logger.info("Invoking Lambda function asynchronously")
-        Utility.invoke_funct_on_aws_lambda(
+        Invoker.invoke_funct_on_aws_lambda(
             Config.logger,
             endpoint_id,
             "async_execute_tool_function",
@@ -931,7 +946,7 @@ def async_execute_tool_function(
             type="resource",
             resource=TextResourceContents(
                 uri=f"mcp://function-call/{mcp_function_call['mcpFunctionCallUuid']}",
-                text=Utility.json_dumps(
+                text=Serializer.json_dumps(
                     {
                         "mcp_function_call_uuid": mcp_function_call[
                             "mcpFunctionCallUuid"

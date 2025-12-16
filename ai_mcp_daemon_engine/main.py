@@ -11,7 +11,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from silvaengine_utility import Utility
+from silvaengine_utility.serializer import Serializer
+
 
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
@@ -107,25 +108,35 @@ class AIMCPDaemonEngine(object):
         self.logger = logger
         self.setting = setting
 
-    def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
-        endpoint_id = params.pop("endpoint_id", None)
+    def _apply_partition_defaults(self, params: Dict[str, Any]) -> None:
+        """
+        Ensure endpoint_id/part_id defaults and assemble partition_key.
+        """
         ## Test the waters 🧪 before diving in!
         ##<--Testing Data-->##
-        if endpoint_id is None:
-            endpoint_id = self.setting.get("endpoint_id")
+        if params.get("endpoint_id") is None:
+            params["endpoint_id"] = self.setting.get("endpoint_id")
+        if params.get("part_id") is None:
+            params["part_id"] = self.setting.get("part_id")
         ##<--Testing Data-->##
+
+        endpoint_id = params.get("endpoint_id")
+        part_id = params.get("part_id")
+        params["partition_key"] = f"{endpoint_id}#{part_id}"
+
+    def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
+        self._apply_partition_defaults(params)
+
+        partition_key = params.pop("partition_key", None)
 
         from .handlers.mcp_server import process_mcp_message
 
-        return Utility.json_dumps(asyncio.run(process_mcp_message(endpoint_id, params)))
+        return Serializer.json_dumps(asyncio.run(process_mcp_message(partition_key, params)))
 
     def async_execute_tool_function(self, **params: Dict[str, Any]) -> None:
-        endpoint_id = params.pop("endpoint_id", None)
-        ## Test the waters 🧪 before diving in!
-        ##<--Testing Data-->##
-        if endpoint_id is None:
-            endpoint_id = self.setting.get("endpoint_id")
-        ##<--Testing Data-->##
+        self._apply_partition_defaults(params)
+
+        partition_key = params.pop("partition_key", None)
 
         name = params.get("name", None)
         arguments = params.get("arguments", None)
@@ -138,11 +149,13 @@ class AIMCPDaemonEngine(object):
         from .handlers.mcp_utility import execute_tool_function
 
         execute_tool_function(
-            endpoint_id, name, arguments, mcp_function_call_uuid=mcp_function_call_uuid
+            partition_key, name, arguments, mcp_function_call_uuid=mcp_function_call_uuid
         )
         return
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
+        self._apply_partition_defaults(params)
+        
         return Config.mcp_core.mcp_core_graphql(**params)
 
     def daemon(self):
