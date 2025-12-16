@@ -68,6 +68,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -81,8 +86,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Simple ping query to test API connectivity. Returns a greeting with current time."
           },
@@ -104,6 +115,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -117,8 +133,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Create or update an MCP function. This registers a new function or updates existing one with metadata."
           },
@@ -135,6 +157,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -148,8 +175,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Get a specific MCP function by name"
           },
@@ -166,6 +199,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -179,8 +217,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "List MCP functions with optional filters"
           },
@@ -197,6 +241,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -210,8 +259,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Delete an MCP function by name"
           },
@@ -233,6 +288,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -246,8 +306,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Create or update an MCP function call record. Tracks execution of MCP functions."
           },
@@ -264,6 +330,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -277,8 +348,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Get a specific MCP function call by UUID"
           },
@@ -295,6 +372,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -308,8 +390,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "List MCP function calls with optional filters"
           },
@@ -326,6 +414,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -339,8 +432,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Delete an MCP function call record by UUID"
           },
@@ -362,6 +461,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -375,8 +479,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Create or update an MCP module. Modules contain classes and functions."
           },
@@ -393,6 +503,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -406,8 +521,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Get a specific MCP module by name"
           },
@@ -424,6 +545,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -437,8 +563,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "List MCP modules with optional filters"
           },
@@ -455,6 +587,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -468,8 +605,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Delete an MCP module by name"
           },
@@ -491,6 +634,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -504,8 +652,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Create or update an MCP setting. Settings store configuration data."
           },
@@ -522,6 +676,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -535,8 +694,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Get a specific MCP setting by ID"
           },
@@ -553,6 +718,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -566,8 +736,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "List MCP settings with optional filters"
           },
@@ -584,6 +760,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -597,8 +778,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Delete an MCP setting by ID"
           },
@@ -620,6 +807,11 @@
                 "type": "text"
               },
               {
+                "key": "Part-ID",
+                "value": "{{part_id}}",
+                "type": "text"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -633,8 +825,14 @@
             },
             "url": {
               "raw": "{{api_url}}/{{area}}/{{endpoint_id}}/{{funct}}",
-              "host": ["{{api_url}}"],
-              "path": ["{{area}}", "{{endpoint_id}}", "{{funct}}"]
+              "host": [
+                "{{api_url}}"
+              ],
+              "path": [
+                "{{area}}",
+                "{{endpoint_id}}",
+                "{{funct}}"
+              ]
             },
             "description": "Load MCP configuration including tools, resources, prompts, modules, and settings. This is a bulk operation that processes and stores the entire MCP configuration."
           },

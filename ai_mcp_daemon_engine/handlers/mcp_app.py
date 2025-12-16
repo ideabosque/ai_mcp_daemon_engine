@@ -381,7 +381,7 @@ async def refresh_mcp_cache(
     # Validate endpoint_id
     if not endpoint_id or not endpoint_id.replace("_", "").replace("-", "").isalnum():
         raise HTTPException(status_code=400, detail="Invalid endpoint_id")
-        
+
     try:
         partition_key, part_id = _get_partition_key(endpoint_id, request)
 
@@ -528,7 +528,8 @@ async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     )
 
     # Execute the GraphQL query
-    result = Serializer.json_loads(Config.mcp_core.mcp_core_graphql(**params))
+    response = Config.mcp_core.mcp_core_graphql(**params)
+    result = Serializer.json_loads(response.get("body", response))
 
     # If it was a successful configuration mutation, clear the cache
     if is_config_mutation and "errors" not in result:

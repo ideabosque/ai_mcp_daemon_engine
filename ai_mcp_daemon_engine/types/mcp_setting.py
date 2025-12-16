@@ -11,7 +11,7 @@ from silvaengine_utility import JSON
 
 
 class MCPSettingType(ObjectType):
-    endpoint_id = String()
+    partition_key = String()
     setting_id = String()
     setting = JSON()
     updated_by = String()

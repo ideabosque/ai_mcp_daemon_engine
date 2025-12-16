@@ -11,7 +11,7 @@ from silvaengine_utility import JSON
 
 
 class MCPModuleType(ObjectType):
-    endpoint_id = String()
+    partition_key = String()
     module_name = String()
     package_name = String()
     classes = JSON()

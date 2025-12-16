@@ -13,9 +13,9 @@ import threading
 import time
 import traceback
 import zipfile
-import pendulum
 from typing import Any, Dict, Optional, Sequence
 
+import pendulum
 from mcp.types import (
     EmbeddedResource,
     GetPromptResult,
@@ -26,8 +26,8 @@ from mcp.types import (
     TextResourceContents,
 )
 
-from silvaengine_utility.serializer import Serializer
 from silvaengine_utility.invoker import Invoker
+from silvaengine_utility.serializer import Serializer
 
 from .config import Config
 
@@ -95,7 +95,7 @@ INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
         updatedBy: $updatedBy
     ) {
         mcpFunctionCall { 
-            endpointId 
+            partitionKey 
             mcpFunctionCallUuid 
             mcpType 
             name 
@@ -142,13 +142,13 @@ def _check_existing_function_call(
             },
         }
     )
-    response = Serializer.json_loads(response)
+    response = Serializer.json_loads(response.get("body", response))
 
     if "errors" in response:
         Config.logger.error(f"GraphQL error: {response['errors']}")
         raise Exception(response["errors"])
 
-    mcp_function_call = response["data"]["mcpFunctionCall"]
+    mcp_function_call = response["mcpFunctionCall"]
 
     return mcp_function_call
 
@@ -201,15 +201,13 @@ def _insert_update_mcp_function_call(
             }
         )
 
-    response = Serializer.json_loads(response)
+    response = Serializer.json_loads(response.get("body", response))
 
     if "errors" in response:
         Config.logger.error(f"GraphQL error: {response['errors']}")
         raise Exception(response["errors"])
 
-    mcp_function_call = response["data"]["insertUpdateMcpFunctionCall"][
-        "mcpFunctionCall"
-    ]
+    mcp_function_call = response["insertUpdateMcpFunctionCall"]["mcpFunctionCall"]
 
     return mcp_function_call
 
@@ -565,10 +563,10 @@ def execute_tool_function(
             module["class_name"],
             source=module.get("source"),
         )
-        
+
         if tool_class is None:
             raise Exception(f"Failed to load tool class: {module['class_name']}")
-        
+
         tool = tool_class(Config.logger, **Serializer.json_normalize(module["setting"]))
 
         if hasattr(tool, "partition_key"):

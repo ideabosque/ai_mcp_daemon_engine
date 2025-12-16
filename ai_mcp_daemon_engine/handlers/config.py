@@ -20,60 +20,60 @@ from silvaengine_utility.serializer import Serializer
 from ..models import utils
 
 MCP_FUNCTION_LIST = """query mcpFunctionList(
-        $pageNumber: Int, 
-        $limit: Int, 
-        $mcpType: String, 
-        $moduleName: String, 
-        $className: String, 
+        $pageNumber: Int,
+        $limit: Int,
+        $mcpType: String,
+        $moduleName: String,
+        $className: String,
         $functionName: String
     ) {
     mcpFunctionList(
-        pageNumber: $pageNumber, 
-        limit: $limit, 
-        mcpType: $mcpType, 
-        moduleName: $moduleName, 
-        className: $className, 
+        pageNumber: $pageNumber,
+        limit: $limit,
+        mcpType: $mcpType,
+        moduleName: $moduleName,
+        className: $className,
         functionName: $functionName
     ) {
-        pageSize pageNumber total mcpFunctionList { 
-            endpointId 
-            name 
-            mcpType 
-            description 
-            data 
-            annotations 
-            moduleName 
-            className 
-            functionName 
+        pageSize pageNumber total mcpFunctionList {
+            partitionKey
+            name
+            mcpType
+            description
+            data
+            annotations
+            moduleName
+            className
+            functionName
             returnType
-            isAsync 
-            updatedBy 
-            createdAt 
-            updatedAt 
+            isAsync
+            updatedBy
+            createdAt
+            updatedAt
         }
     }
 }"""
 
 MCP_MODULE = """query mcpModule($moduleName: String!) {
     mcpModule(moduleName: $moduleName) {
-        endpointId 
-        moduleName 
-        packageName 
-        classes 
-        source 
-        updatedBy 
-        createdAt 
+        partitionKey
+        moduleName
+        packageName
+        classes
+        source
+        updatedBy
+        createdAt
         updatedAt
     }
 }"""
 
 MCP_SETTING = """query mcpSetting($settingId: String!) {
     mcpSetting(settingId: $settingId) {
-        endpointId 
-        settingId 
-        setting 
-        updatedBy 
-        createdAt 
+        partitionKey
+        settingId
+        setting
+        updatedBy
+        createdAt
         updatedAt
     }
 }"""
@@ -360,7 +360,7 @@ class Config:
         Fetches and caches MCP configuration for a given endpoint.
 
         Args:
-            partition_key: ID of the endpoint to fetch configuration from
+            partition_key: ID of the partition_key to fetch configuration from
             force_refresh: If True, bypass cache and fetch fresh data
 
         Returns:
@@ -374,7 +374,9 @@ class Config:
             return cls.mcp_configuration[partition_key]
 
         if cls.logger:
-            cls.logger.info(f"Fetching MCP configuration for endpoint: {partition_key}")
+            cls.logger.info(
+                f"Fetching MCP configuration for partition_key: {partition_key}"
+            )
 
         try:
             # Step 1: Fetch all MCP functions
@@ -383,7 +385,7 @@ class Config:
                 query=MCP_FUNCTION_LIST,
                 variables={},
             )
-            response = Serializer.json_loads(response)
+            response = Serializer.json_loads(response.get("body", response))
 
             if "errors" in response:
                 cls.logger.error(
@@ -391,17 +393,13 @@ class Config:
                 )
                 raise Exception(f"Failed to fetch MCP functions: {response['errors']}")
 
-            if (
-                not response.get("data", {})
-                .get("mcpFunctionList", {})
-                .get("mcpFunctionList")
-            ):
+            if not response.get("mcpFunctionList", {}).get("mcpFunctionList"):
                 cls.logger.warning(
-                    f"No MCP functions found for endpoint: {partition_key}"
+                    f"No MCP functions found for partition_key: {partition_key}"
                 )
                 mcp_functions = []
             else:
-                mcp_functions = response["data"]["mcpFunctionList"]["mcpFunctionList"]
+                mcp_functions = response["mcpFunctionList"]["mcpFunctionList"]
 
             # Step 2: Categorize functions by type
             tools = [func for func in mcp_functions if func.get("mcpType") == "tool"]
@@ -443,7 +441,7 @@ class Config:
 
             if cls.logger:
                 cls.logger.info(
-                    f"Successfully cached MCP configuration for endpoint: {partition_key}"
+                    f"Successfully cached MCP configuration for partition_key: {partition_key}"
                 )
 
             return mcp_configuration
@@ -522,7 +520,9 @@ class Config:
                     query=MCP_MODULE,
                     variables={"moduleName": module_name},
                 )
-                module_response = Serializer.json_loads(module_response)
+                module_response = Serializer.json_loads(
+                    module_response.get("body", module_response)
+                )
 
                 if "errors" in module_response:
                     if cls.logger:
@@ -531,7 +531,7 @@ class Config:
                         )
                     continue
 
-                module_data = module_response.get("data", {}).get("mcpModule")
+                module_data = module_response.get("mcpModule")
                 if not module_data:
                     if cls.logger:
                         cls.logger.warning(f"No data found for module: {module_name}")
@@ -574,7 +574,9 @@ class Config:
                             query=MCP_SETTING,
                             variables={"settingId": class_info["setting_id"]},
                         )
-                        setting_response = Serializer.json_loads(setting_response)
+                        setting_response = Serializer.json_loads(
+                            setting_response.get("body", setting_response)
+                        )
 
                         if "errors" in setting_response:
                             if cls.logger:
@@ -583,10 +585,8 @@ class Config:
                                 )
                             setting_data = {}
                         else:
-                            setting_data = (
-                                setting_response.get("data", {})
-                                .get("mcpSetting", {})
-                                .get("setting", {})
+                            setting_data = setting_response.get("mcpSetting", {}).get(
+                                "setting", {}
                             )
 
                         # Build module info
@@ -623,17 +623,17 @@ class Config:
 
     @classmethod
     def refresh_mcp_configuration(cls, partition_key: str) -> Dict[str, Any]:
-        """Force refresh of MCP configuration for an endpoint."""
+        """Force refresh of MCP configuration for an partition_key."""
         return cls.fetch_mcp_configuration(partition_key, force_refresh=True)
 
     @classmethod
     def clear_mcp_configuration_cache(cls, partition_key: str = None):
-        """Clear MCP configuration cache for specific endpoint or all endpoints."""
+        """Clear MCP configuration cache for specific partition_key or all partition_keys."""
         if partition_key:
             cls.mcp_configuration.pop(partition_key, None)
             if cls.logger:
                 cls.logger.info(
-                    f"Cleared MCP configuration cache for endpoint: {partition_key}"
+                    f"Cleared MCP configuration cache for partition_key: {partition_key}"
                 )
         else:
             cls.mcp_configuration.clear()

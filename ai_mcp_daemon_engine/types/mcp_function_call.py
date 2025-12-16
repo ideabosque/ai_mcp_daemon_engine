@@ -11,7 +11,7 @@ from silvaengine_utility import JSON
 
 
 class MCPFunctionCallType(ObjectType):
-    endpoint_id = String()
+    partition_key = String()
     mcp_function_call_uuid = String()
     mcp_type = String()
     name = String()
