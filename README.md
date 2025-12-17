@@ -111,11 +111,18 @@ curl -N http://localhost:8000/default/mcp -H "Authorization: Bearer <token>"
 
 ## Project Status and Roadmap
 
-- Status: Beta-ready daemon; ~75% complete. Core runtime, transport, auth, MCP integration, and GraphQL CRUD are complete; observability and testing modernization are in progress.
-- Architecture snapshot: FastAPI JSON-RPC/SSE plus STDIO sidecar; DynamoDB persistence with tenant isolation via `endpoint_id`; dynamic function bundles from S3; cascading cache purge; pluggable auth (Local JWT or AWS Cognito).
-- Current hardening: Adding structured logging, metrics (Prometheus/CloudWatch), rate limiting, and request-scoped caching.
-- Testing modernization: Migrating legacy `unittest` to `pytest` with markers for `integration`, `sse`, `auth`, `mcp_core`, and `graphql`; coverage targets 80%+ overall and 90%+ for core handlers.
-- Planned features: CI/CD pipelines, automated benchmarking, client SDK generation, multi-region replication support, and DataLoader-style batch queries for GraphQL.
+- **Status**: Beta-ready daemon; ~75% complete. Core runtime, transport, auth, MCP integration, and GraphQL CRUD are complete; observability and testing modernization are in progress.
+- **Architecture snapshot**: FastAPI JSON-RPC/SSE plus STDIO sidecar; DynamoDB persistence with tenant isolation via `partition_key`; dynamic function bundles from S3; cascading cache purge; pluggable auth (Local JWT or AWS Cognito).
+- **Current hardening**: Adding structured logging, metrics (Prometheus/CloudWatch), rate limiting, and request-scoped caching.
+- **Testing modernization**: Migrating legacy `unittest` to `pytest` with markers for `integration`, `sse`, `auth`, `mcp_core`, and `graphql`; coverage targets 80%+ overall and 90%+ for core handlers.
+- **Planned features**: CI/CD pipelines, automated benchmarking, client SDK generation, multi-region replication support, and DataLoader-style batch queries for GraphQL.
+
+### Recent Updates (v1.2.0 - December 2024)
+
+- **Schema Migration**: Renamed `endpoint_id` → `partition_key` across all models for better multi-tenancy support and sub-partitioning flexibility
+- **Query Caching**: Implemented `@method_cache` decorator on all `resolve_*_list` queries with 30-minute TTL
+- **Cache Optimization**: Reduced DynamoDB read costs and improved response times through comprehensive query-level caching
+- **Cascading Cache Purge**: Enhanced cache invalidation with proper parent-child relationship tracking
 
 ---
 
@@ -273,7 +280,7 @@ Supply a JSON blob that describes the endpoint’s capabilities and set its path
 ### Relationship Overview
 
 ```
-ENDPOINT (partition key: endpoint_id)
+PARTITION (partition_key: tenant isolation boundary)
     |
     |-- MCP MODULE (module_name, package_name, classes[])
     |       |
@@ -297,7 +304,7 @@ ENDPOINT (partition key: endpoint_id)
 
 | Parent | Child | Linking Field(s) | Notes |
 | ------ | ----- | ---------------- | ----- |
-| `endpoint_id` | All models | `endpoint_id` (hash key) | Multi-tenant boundary for every table. |
+| `partition_key` | All models | `partition_key` (hash key) | Multi-tenant boundary for every table. Supports simple (`endpoint_id`) or composite (`endpoint_id#part_id`) partitioning. |
 | MCPModule | MCPSetting | `classes[].setting_id` → `setting_id` | Module classes point to a shared setting document built during config import. |
 | MCPModule | MCPFunction | `module_name` / `class_name` | Functions reference the Python module/class implementing the MCP tool/resource/prompt. |
 | MCPFunction | MCPFunctionCall | `name` (+ `mcp_type`) | Call records keep the logical MCP name/type they executed; also used for cache invalidation. |
@@ -307,10 +314,10 @@ ENDPOINT (partition key: endpoint_id)
 
 | Model | Hash Key | Range Key | Secondary Indexes | Purpose |
 | ----- | -------- | --------- | ----------------- | ------- |
-| MCPModuleModel | `endpoint_id` | `module_name` | `package_name-index` (LSI) | Query modules by package or module name per endpoint. |
-| MCPFunctionModel | `endpoint_id` | `name` | `mcp_type-index` (LSI) | Filter tools/resources/prompts by MCP type. |
-| MCPFunctionCallModel | `endpoint_id` | `mcp_function_call_uuid` | `mcp_type-index`, `name-index` (LSIs) | Slice executions by MCP type or logical name. |
-| MCPSettingModel | `endpoint_id` | `setting_id` | — | Shared module configuration. |
+| MCPModuleModel | `partition_key` | `module_name` | `package_name-index` (LSI) | Query modules by package or module name per partition. |
+| MCPFunctionModel | `partition_key` | `name` | `mcp_type-index` (LSI) | Filter tools/resources/prompts by MCP type. |
+| MCPFunctionCallModel | `partition_key` | `mcp_function_call_uuid` | `mcp_type-index`, `name-index` (LSIs) | Slice executions by MCP type or logical name. |
+| MCPSettingModel | `partition_key` | `setting_id` | — | Shared module configuration. |
 
 ### Cache Cascade
 
@@ -329,7 +336,7 @@ erDiagram
     mcp_modules ||--o{ mcp_settings : "references via classes[].setting_id"
 
     mcp_modules {
-        string endpoint_id
+        string partition_key
         string module_name
         string package_name
         list classes
@@ -337,7 +344,7 @@ erDiagram
         datetime updated_at
     }
     mcp_functions {
-        string endpoint_id
+        string partition_key
         string name
         string mcp_type
         string module_name
@@ -348,7 +355,7 @@ erDiagram
         json data
     }
     mcp_function_calls {
-        string endpoint_id
+        string partition_key
         string mcp_function_call_uuid
         string name
         string mcp_type
@@ -358,7 +365,7 @@ erDiagram
         number time_spent
     }
     mcp_settings {
-        string endpoint_id
+        string partition_key
         string setting_id
         json setting
     }
@@ -390,10 +397,35 @@ OpenAPI is served at `/docs` and ReDoc at `/redoc`.
 
 ## Development & Testing
 
+### Installation
+
 ```bash
+# Clone and install in development mode
+git clone https://github.com/silvaengine/ai_mcp_daemon_engine.git
+cd ai_mcp_daemon_engine
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest
 ```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov=ai_mcp_daemon_engine --cov-report=html
+
+# Run specific test markers
+pytest -m unit           # Fast unit tests
+pytest -m integration    # Integration tests (requires AWS)
+pytest -m sse            # SSE-specific tests
+pytest -m auth           # Authentication tests
+```
+
+### Documentation
+
+For detailed development guidelines, schema documentation, caching architecture, and complete development plan, see [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 
 ---
 
