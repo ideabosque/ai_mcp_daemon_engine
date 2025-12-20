@@ -569,8 +569,14 @@ def execute_tool_function(
 
         tool = tool_class(Config.logger, **Serializer.json_normalize(module["setting"]))
 
-        if hasattr(tool, "partition_key"):
-            tool.partition_key = partition_key
+        if hasattr(tool, "endpoint_id") and hasattr(tool, "part_id"):
+            if "#" in partition_key:
+                keys = partition_key.split("#")
+                tool.endpoint_id = keys[0]
+                tool.part_id = keys[1]
+            else:
+                tool.endpoint_id = partition_key
+                tool.part_id = partition_key
 
         tool_function = getattr(tool, module_link["function_name"])
 
