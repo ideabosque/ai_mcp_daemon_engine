@@ -11,7 +11,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from silvaengine_utility.serializer import Serializer
+from silvaengine_utility import HttpResponse, Serializer
 
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
@@ -130,30 +130,18 @@ class AIMCPDaemonEngine(object):
             params["partition_key"] = f"{endpoint_id}#{part_id}"
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
-        self._apply_partition_defaults(params)
-        self.logger.info(">" * 120)
-        self.logger.info(params)
-
-        partition_key = params.pop("partition_key", None)
-
         from .handlers.mcp_server import process_mcp_message
 
-        r = Serializer.json_dumps(
-            asyncio.run(process_mcp_message(partition_key, params))
+        self._apply_partition_defaults(params)
+
+        return HttpResponse.format_response(
+            data=asyncio.run(
+                process_mcp_message(
+                    params.pop("partition_key", None),
+                    params,
+                )
+            )
         )
-
-        self.logger.info(r)
-        self.logger.info("<" * 120)
-
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "application/json",
-            },
-            "body": r,
-        }
 
     def async_execute_tool_function(self, **params: Dict[str, Any]) -> None:
         self._apply_partition_defaults(params)
