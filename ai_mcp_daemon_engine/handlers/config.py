@@ -210,14 +210,18 @@ class Config:
             **setting (Dict[str, Any]): Configuration dictionary.
         """
         try:
+            logger.info(f"initialize {'>>' * 50}{setting}")
+
             cls.logger = logger
             cls.setting = setting
             cls._set_parameters(setting)
             cls._setup_function_paths(setting)
-            if cls.transport == "sse" and cls.auth_provider == "local":
-                cls._USERS = cls._load()
             cls._initialize_mcp_core(logger, setting)
             cls._initialize_aws_services(logger, setting)
+
+            if cls.transport == "sse" and cls.auth_provider == "local":
+                cls._USERS = cls._load()
+
             if setting.get("initialize_tables"):
                 cls._initialize_tables(logger)
             logger.info("Configuration initialized successfully.")
@@ -232,14 +236,12 @@ class Config:
         Args:
             setting (Dict[str, Any]): Configuration dictionary.
         """
+        cls.logger.info(f"_set_parameters {'<<' * 50}{setting}")
+
         cls.sse_clients = {}
         cls.user_clients = {}
         cls.transport = setting.get("transport", "sse")
         cls.port = setting.get("port", 8000)
-        if setting.get("mcp_configuration") is not None:
-            cls.mcp_configuration["default"] = setting["mcp_configuration"]
-            cls.logger.info("MCP Configuration loaded successfully.")
-
         cls.auth_provider = setting.get("auth_provider", "local")  # "local" | "cognito"
         cls.jwt_secret_key = setting.get("jwt_secret_key", "CHANGEME")
         cls.jwt_algorithm = setting.get("jwt_algorithm", "HS256")
@@ -251,6 +253,10 @@ class Config:
         cls.cognito_app_client_id = setting.get("cognito_app_client_id", None)
         cls.cognito_app_secret = setting.get("cognito_app_secret", None)
         cls.jwks_cache_ttl = int(setting.get("jwks_cache_ttl", 3600))
+
+        if setting.get("mcp_configuration") is not None:
+            cls.mcp_configuration["default"] = setting["mcp_configuration"]
+            cls.logger.info("MCP Configuration loaded successfully.")
 
     @classmethod
     def _setup_function_paths(cls, setting: Dict[str, Any]) -> None:
@@ -285,6 +291,8 @@ class Config:
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
             from .mcp_core import MCPCore
+
+            logger.info(f"initialize_mcp_core {'=' * 50}{setting}")
 
             cls.mcp_core = MCPCore(logger, **setting)
 
@@ -347,6 +355,7 @@ class Config:
     @classmethod
     def _load(cls) -> dict[str, LocalUser]:
         p = Path(cls.local_user_file).expanduser()
+
         with p.open("r", encoding="utf-8") as f:
             raw = json.load(f)
         return {u["username"]: LocalUser(**u) for u in raw}
