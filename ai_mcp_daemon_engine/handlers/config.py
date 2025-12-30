@@ -14,7 +14,6 @@ from typing import Any, Dict, List
 import boto3
 from passlib.context import CryptContext
 from pydantic import AnyUrl
-
 from silvaengine_utility.serializer import Serializer
 
 from ..models import utils
@@ -35,7 +34,10 @@ MCP_FUNCTION_LIST = """query mcpFunctionList(
         className: $className,
         functionName: $functionName
     ) {
-        pageSize pageNumber total mcpFunctionList {
+        pageSize
+        pageNumber
+        total
+        mcpFunctionList {
             partitionKey
             name
             mcpType
@@ -392,6 +394,8 @@ class Config:
                     f"GraphQL errors in MCP_FUNCTION_LIST: {response['errors']}"
                 )
                 raise Exception(f"Failed to fetch MCP functions: {response['errors']}")
+
+            cls.logger.info(f"Request MCP Function List: {'>' * 20}{response}")
 
             if not response.get("mcpFunctionList", {}).get("mcpFunctionList"):
                 cls.logger.warning(
