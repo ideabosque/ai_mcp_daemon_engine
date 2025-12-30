@@ -8,9 +8,8 @@ import logging
 from typing import Any, Dict
 
 from graphene import Schema
-
-from silvaengine_utility.graphql import Graphql
 from silvaengine_dynamodb_base import BaseModel
+from silvaengine_utility.graphql import Graphql
 
 from .schema import Mutations, Query, type_class
 
@@ -29,6 +28,7 @@ class MCPCore(Graphql):
             BaseModel.Meta.aws_secret_access_key = setting.get("aws_secret_access_key")
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
+        self.logger.info(f"mcp_core_graphql {'#' * 40}{params}")
         schema = Schema(
             query=Query,
             mutation=Mutations,
