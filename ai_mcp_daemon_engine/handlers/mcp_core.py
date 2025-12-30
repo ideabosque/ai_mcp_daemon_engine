@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 from graphene import Schema
 from silvaengine_dynamodb_base import BaseModel
-from silvaengine_utility.graphql import Graphql
+from silvaengine_utility import Graphql
 
 from .schema import Mutations, Query, type_class
 
@@ -37,5 +37,4 @@ class MCPCore(Graphql):
             )
             return self.execute(schema, **params)
         except Exception as e:
-            self.logger.info(e)
-            raise
+            raise e
