@@ -13,7 +13,6 @@ from typing import Any, Dict, List
 
 from silvaengine_utility.serializer import Serializer
 
-
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
 
@@ -99,7 +98,6 @@ def deploy() -> List:
 
 class AIMCPDaemonEngine(object):
     def __init__(self, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
-
         # Initialize configuration via the Config class
         Config.initialize(logger, **setting)
 
@@ -129,11 +127,17 @@ class AIMCPDaemonEngine(object):
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         self._apply_partition_defaults(params)
 
+        self.logger.info(">" * 120)
+        self.logger.info(params)
+        self.logger.info("<" * 120)
+
         partition_key = params.pop("partition_key", None)
 
         from .handlers.mcp_server import process_mcp_message
 
-        return Serializer.json_dumps(asyncio.run(process_mcp_message(partition_key, params)))
+        return Serializer.json_dumps(
+            asyncio.run(process_mcp_message(partition_key, params))
+        )
 
     def async_execute_tool_function(self, **params: Dict[str, Any]) -> None:
         self._apply_partition_defaults(params)
@@ -151,19 +155,21 @@ class AIMCPDaemonEngine(object):
         from .handlers.mcp_utility import execute_tool_function
 
         execute_tool_function(
-            partition_key, name, arguments, mcp_function_call_uuid=mcp_function_call_uuid
+            partition_key,
+            name,
+            arguments,
+            mcp_function_call_uuid=mcp_function_call_uuid,
         )
         return
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         self._apply_partition_defaults(params)
-        
+
         return Config.mcp_core.mcp_core_graphql(**params)
 
     def daemon(self):
         try:
             if self.transport == "sse":
-
                 import uvicorn
 
                 from .handlers.auth_router import router as auth_router
