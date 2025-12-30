@@ -145,7 +145,15 @@ class AIMCPDaemonEngine(object):
         self.logger.info(r)
         self.logger.info("<" * 120)
 
-        return r
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json",
+            },
+            "body": r,
+        }
 
     def async_execute_tool_function(self, **params: Dict[str, Any]) -> None:
         self._apply_partition_defaults(params)
