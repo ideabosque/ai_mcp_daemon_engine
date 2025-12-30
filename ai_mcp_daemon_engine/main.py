@@ -131,18 +131,21 @@ class AIMCPDaemonEngine(object):
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         self._apply_partition_defaults(params)
-
         self.logger.info(">" * 120)
         self.logger.info(params)
-        self.logger.info("<" * 120)
 
         partition_key = params.pop("partition_key", None)
 
         from .handlers.mcp_server import process_mcp_message
 
-        return Serializer.json_dumps(
+        r = Serializer.json_dumps(
             asyncio.run(process_mcp_message(partition_key, params))
         )
+
+        self.logger.info(r)
+        self.logger.info("<" * 120)
+
+        return r
 
     def async_execute_tool_function(self, **params: Dict[str, Any]) -> None:
         self._apply_partition_defaults(params)
