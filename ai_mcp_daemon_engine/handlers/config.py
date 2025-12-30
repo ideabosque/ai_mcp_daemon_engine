@@ -381,6 +381,8 @@ class Config:
             )
 
         try:
+            cls.logger.info(f"MCP Function List（fetch_mcp_configuration）: {'>' * 60}")
+            print(f"MCP Function List（fetch_mcp_configuration）: {'>' * 60}")
             # Step 1: Fetch all MCP functions
             response = cls.mcp_core.mcp_core_graphql(
                 partition_key=partition_key,
