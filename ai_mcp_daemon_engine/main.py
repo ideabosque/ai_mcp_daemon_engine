@@ -114,14 +114,19 @@ class AIMCPDaemonEngine(object):
         ##<--Testing Data-->##
         if params.get("endpoint_id") is None:
             params["endpoint_id"] = self.setting.get("endpoint_id")
-        if params.get("part_id") is None:
-            params["part_id"] = self.setting.get("part_id")
-        ##<--Testing Data-->##
+
+        part_id = params.get("custom_headers", {}).get(
+            "part_id", self.setting.get("part_id")
+        )
 
         endpoint_id = params.get("endpoint_id")
         params["partition_key"] = f"{endpoint_id}"
-        part_id = params.get("part_id")
+
+        if params.get("context") is None:
+            params["context"] = {}
+
         if part_id:
+            params["context"]["partition_key"] = f"{endpoint_id}#{part_id}"
             params["partition_key"] = f"{endpoint_id}#{part_id}"
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
