@@ -29,9 +29,13 @@ class MCPCore(Graphql):
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         self.logger.info(f"mcp_core_graphql {'#' * 40}{params}")
-        schema = Schema(
-            query=Query,
-            mutation=Mutations,
-            types=type_class(),
-        )
-        return self.execute(schema, **params)
+        try:
+            schema = Schema(
+                query=Query,
+                mutation=Mutations,
+                types=type_class(),
+            )
+            return self.execute(schema, **params)
+        except Exception as e:
+            self.logger.info(e)
+            raise
