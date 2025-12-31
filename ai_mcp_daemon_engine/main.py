@@ -120,21 +120,17 @@ class AIMCPDaemonEngine(object):
         endpoint_id = params.get("endpoint_id")
         params["partition_key"] = f"{endpoint_id}"
 
-        self.logger.info(f"======================= {endpoint_id} {part_id}")
-
         if params.get("context") is None:
             params["context"] = {}
 
         if part_id:
             params["context"]["partition_key"] = f"{endpoint_id}#{part_id}"
             params["partition_key"] = f"{endpoint_id}#{part_id}"
-            self.logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         from .handlers.mcp_server import process_mcp_message
 
         self._apply_partition_defaults(params)
-        self.logger.info(f">>>>>>>>>>>>>>>>>>>>>>>>>>> {params}")
 
         return HttpResponse.format_response(
             data=asyncio.run(
@@ -171,6 +167,8 @@ class AIMCPDaemonEngine(object):
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         if Config.mcp_core:
             self._apply_partition_defaults(params)
+
+            self.logger.info(f">>>>>>>>>>>>>>>>>>>>>>>>>>> {params}")
 
             return Config.mcp_core.mcp_core_graphql(**params)
 
