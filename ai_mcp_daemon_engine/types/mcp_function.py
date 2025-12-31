@@ -13,7 +13,7 @@ class MCPFunctionType(ObjectType):
     partition_key = String()
     name = String()
     mcp_type = String()
-    description = String(name="description")
+    desc = String(name="description")
     data = JSON()
     annotations = String()
     module_name = String()
