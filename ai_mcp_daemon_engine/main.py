@@ -168,8 +168,6 @@ class AIMCPDaemonEngine(object):
         if Config.mcp_core:
             self._apply_partition_defaults(params)
 
-            self.logger.info(f">>>>>>>>>>>>>>>>>>>>>>>>>>> {params}")
-
             return Config.mcp_core.mcp_core_graphql(**params)
 
         return Graphql.error_response("Invalid mcp graphql engine")

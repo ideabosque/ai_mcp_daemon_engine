@@ -176,25 +176,26 @@ def resolve_mcp_function(
     type_funct=get_mcp_function_type,
 )
 def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
-    info.context.get("logger").info(f">>>>>>>>>>{info.context}")
     partition_key = info.context["partition_key"]
     mcp_type = kwargs.get("mcp_type")
     description = kwargs.get("description")
     module_name = kwargs.get("module_name")
     class_name = kwargs.get("class_name")
     function_name = kwargs.get("function_name")
-
     args = []
     inquiry_funct = MCPFunctionModel.scan
     count_funct = MCPFunctionModel.count
+
     if partition_key:
         args = [partition_key, None]
         inquiry_funct = MCPFunctionModel.query
+
         if mcp_type:
             inquiry_funct = MCPFunctionModel.mcp_type_index.query
             args[1] = MCPFunctionModel.mcp_type == mcp_type
             count_funct = MCPFunctionModel.mcp_type_index.count
     the_filters = None
+
     if description:
         the_filters &= MCPFunctionModel.description.contains(description)
     if module_name:
@@ -205,6 +206,12 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
         the_filters &= MCPFunctionModel.function_name == function_name
     if the_filters is not None:
         args.append(the_filters)
+
+    info.context.get("logger").info(
+        f">>>>> Inquiry Function {'>' * 80} {inquiry_funct}"
+    )
+    info.context.get("logger").info(f">>>>> Count Function {'>' * 80} {count_funct}")
+    info.context.get("logger").info(f">>>>> Argments {'>' * 80} {args}")
 
     return inquiry_funct, count_funct, args
 
