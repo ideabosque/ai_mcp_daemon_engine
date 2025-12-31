@@ -11,7 +11,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from silvaengine_utility import HttpResponse, Serializer
+from silvaengine_utility import Graphql, HttpResponse, Serializer
 
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
@@ -169,9 +169,12 @@ class AIMCPDaemonEngine(object):
         return
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
-        self._apply_partition_defaults(params)
+        if Config.mcp_core:
+            self._apply_partition_defaults(params)
 
-        return Config.mcp_core.mcp_core_graphql(**params)
+            return Config.mcp_core.mcp_core_graphql(**params)
+
+        return Graphql.error_response("Invalid mcp graphql engine")
 
     def daemon(self):
         try:

@@ -16,7 +16,7 @@ from .schema import Mutations, Query, type_class
 
 class MCPCore(Graphql):
     def __init__(self, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
-        super().__init__(logger, **setting)
+        Graphql.__init__(self, logger, **setting)
 
         if (
             setting.get("region_name")
