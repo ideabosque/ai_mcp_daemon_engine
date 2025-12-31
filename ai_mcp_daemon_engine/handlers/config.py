@@ -392,11 +392,11 @@ class Config:
             )
 
         try:
-            cls.logger.info(f"MCP Function List（fetch_mcp_configuration）: {'>' * 60}")
-            print(f"MCP Function List（fetch_mcp_configuration）: {'>' * 60}")
             # Step 1: Fetch all MCP functions
             response = cls.mcp_core.mcp_core_graphql(
-                partition_key=partition_key,
+                context={
+                    partition_key: partition_key,
+                },
                 query=MCP_FUNCTION_LIST,
                 variables={},
             )
@@ -537,7 +537,9 @@ class Config:
             try:
                 # Fetch module information
                 module_response = cls.mcp_core.mcp_core_graphql(
-                    partition_key=partition_key,
+                    context={
+                        partition_key: partition_key,
+                    },
                     query=MCP_MODULE,
                     variables={"moduleName": module_name},
                 )
@@ -591,7 +593,9 @@ class Config:
                 for class_name, class_info in class_to_setting_map.items():
                     try:
                         setting_response = cls.mcp_core.mcp_core_graphql(
-                            partition_key=partition_key,
+                            context={
+                                partition_key: partition_key,
+                            },
                             query=MCP_SETTING,
                             variables={"settingId": class_info["setting_id"]},
                         )

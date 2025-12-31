@@ -25,7 +25,6 @@ from mcp.types import (
     TextContent,
     TextResourceContents,
 )
-
 from silvaengine_utility.invoker import Invoker
 from silvaengine_utility.serializer import Serializer
 
@@ -73,69 +72,72 @@ def wait_for_background_threads(timeout=30):
 
 
 INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
-    $arguments: JSON, 
-    $hasContent: Boolean, 
-    $mcpFunctionCallUuid: String, 
-    $mcpType: String, 
-    $name: String, 
-    $notes: String, 
-    $status: String, 
-    $timeSpent: Int, 
+    $arguments: JSON,
+    $hasContent: Boolean,
+    $mcpFunctionCallUuid: String,
+    $mcpType: String,
+    $name: String,
+    $notes: String,
+    $status: String,
+    $timeSpent: Int,
     $updatedBy: String!
 ) {
     insertUpdateMcpFunctionCall(
-        arguments: $arguments, 
-        hasContent: $hasContent, 
-        mcpFunctionCallUuid: $mcpFunctionCallUuid, 
-        mcpType: $mcpType, 
-        name: $name, 
-        notes: $notes, 
-        status: $status, 
-        timeSpent: $timeSpent, 
+        arguments: $arguments,
+        hasContent: $hasContent,
+        mcpFunctionCallUuid: $mcpFunctionCallUuid,
+        mcpType: $mcpType,
+        name: $name,
+        notes: $notes,
+        status: $status,
+        timeSpent: $timeSpent,
         updatedBy: $updatedBy
     ) {
-        mcpFunctionCall { 
-            partitionKey 
-            mcpFunctionCallUuid 
-            mcpType 
-            name 
-            arguments 
-            content 
-            status 
-            notes 
-            timeSpent 
-            updatedBy 
-            createdAt 
-            updatedAt 
-        }    
+        mcpFunctionCall {
+            partitionKey
+            mcpFunctionCallUuid
+            mcpType
+            name
+            arguments
+            content
+            status
+            notes
+            timeSpent
+            updatedBy
+            createdAt
+            updatedAt
+        }
     }
 }"""
 
 
 MCP_FUNCTION_CALL = """query mcpFunctionCall($mcpFunctionCallUuid: String!) {
     mcpFunctionCall(mcpFunctionCallUuid: $mcpFunctionCallUuid) {
-        endpointId 
-        mcpFunctionCallUuid 
-        mcpType 
-        name 
-        arguments 
-        content 
-        status 
-        notes 
-        timeSpent 
-        updatedBy 
-        createdAt 
+        endpointId
+        mcpFunctionCallUuid
+        mcpType
+        name
+        arguments
+        content
+        status
+        notes
+        timeSpent
+        updatedBy
+        createdAt
         updatedAt
     }
 }"""
 
 
 def _check_existing_function_call(
-    partition_key: str, mcp_function_call_uuid: str
+    partition_key: str,
+    mcp_function_call_uuid: str,
 ) -> Dict[str, Any]:
     response = Config.mcp_core.mcp_core_graphql(
         **{
-            "partition_key": partition_key,
+            "context": {
+                "partition_key": partition_key,
+            },
             "query": MCP_FUNCTION_CALL,
             "variables": {
                 "mcpFunctionCallUuid": mcp_function_call_uuid,
@@ -172,7 +174,9 @@ def _insert_update_mcp_function_call(
 
         response = Config.mcp_core.mcp_core_graphql(
             **{
-                "partition_key": partition_key,
+                "context": {
+                    "partition_key": partition_key,
+                },
                 "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
                 "variables": {
                     "mcpFunctionCallUuid": kwargs["mcp_function_call_uuid"],
@@ -188,7 +192,9 @@ def _insert_update_mcp_function_call(
         Config.logger.info("Making GraphQL call to insert/update MCP function")
         response = Config.mcp_core.mcp_core_graphql(
             **{
-                "partition_key": partition_key,
+                "context": {
+                    "partition_key": partition_key,
+                },
                 "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
                 "variables": {
                     "name": kwargs["name"],

@@ -16,7 +16,6 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, params
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-
 from silvaengine_utility.serializer import Serializer
 
 from .config import Config
@@ -101,10 +100,11 @@ async def sse_event_generator(
     """Generate SSE events for connected clients with better error handling"""
     try:
         # Send connection event
-        yield f"event: connected\ndata: {json.dumps({
-            'client_id': client_id,
-            'timestamp': pendulum.now('UTC').isoformat()
-        })}\n\n"
+        yield f"event: connected\ndata: {
+            json.dumps(
+                {'client_id': client_id, 'timestamp': pendulum.now('UTC').isoformat()}
+            )
+        }\n\n"
 
         while not await request.is_disconnected():
             try:
@@ -510,6 +510,14 @@ async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     """Handle GraphQL queries with automatic cache invalidation"""
     params = await request.json()
     partition_key, part_id = _get_partition_key(endpoint_id, request)
+
+    if not params.get("context"):
+        params["context"] = {}
+
+    params["context"] = {
+        "partition_key": partition_key,
+        "part_id": part_id,
+    }
     params["part_id"] = part_id
     params["partition_key"] = partition_key
 
