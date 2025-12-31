@@ -146,6 +146,13 @@ def get_mcp_function_type(
     info: ResolveInfo, mcp_function: MCPFunctionModel
 ) -> MCPFunctionType:
     try:
+        attribute_values = mcp_function.__dict__["attribute_values"]
+        info.context.get("logger").info(
+            f"get_mcp_function_type model: {'>' * 80} {mcp_function}"
+        )
+        info.context.get("logger").info(
+            f"get_mcp_function_type attributes: {'>' * 80} {attribute_values}"
+        )
         mcp_function = mcp_function.__dict__["attribute_values"]
     except Exception as e:
         log = traceback.format_exc()
