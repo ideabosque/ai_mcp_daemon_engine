@@ -101,8 +101,8 @@ class AIMCPDaemonEngine(object):
         # Initialize configuration via the Config class
         Config.initialize(logger, **setting)
 
-        self.transport = setting["transport"]
-        self.port = int(setting["port"])
+        self.transport = str(setting.get("transport", "")).strip()
+        self.port = setting.get("port", 8000)
         self.logger = logger
         self.setting = setting
 
@@ -110,8 +110,6 @@ class AIMCPDaemonEngine(object):
         """
         Ensure endpoint_id/part_id defaults and assemble partition_key.
         """
-        ## Test the waters 🧪 before diving in!
-        ##<--Testing Data-->##
         if params.get("endpoint_id") is None:
             params["endpoint_id"] = self.setting.get("endpoint_id")
 
@@ -122,22 +120,26 @@ class AIMCPDaemonEngine(object):
         endpoint_id = params.get("endpoint_id")
         params["partition_key"] = f"{endpoint_id}"
 
+        self.logger.info(f"======================= {endpoint_id} {part_id}")
+
         if params.get("context") is None:
             params["context"] = {}
 
         if part_id:
             params["context"]["partition_key"] = f"{endpoint_id}#{part_id}"
             params["partition_key"] = f"{endpoint_id}#{part_id}"
+            self.logger.info("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         from .handlers.mcp_server import process_mcp_message
 
         self._apply_partition_defaults(params)
+        self.logger.info(f">>>>>>>>>>>>>>>>>>>>>>>>>>> {params}")
 
         return HttpResponse.format_response(
             data=asyncio.run(
                 process_mcp_message(
-                    params.pop("partition_key", None),
+                    str(params.get("partition_key", "")).strip(),
                     params,
                 )
             )
