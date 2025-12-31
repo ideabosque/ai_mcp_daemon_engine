@@ -146,14 +146,12 @@ def get_mcp_function_type(
     info: ResolveInfo, mcp_function: MCPFunctionModel
 ) -> MCPFunctionType:
     try:
-        mcp_function = {}
-
-        if mcp_function:
-            mcp_function = mcp_function.__dict__["attribute_values"]
+        mcp_function = mcp_function.__dict__["attribute_values"]
     except Exception as e:
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
+
     return MCPFunctionType(**Serializer.json_normalize(mcp_function))
 
 
@@ -185,6 +183,7 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
     args = []
     inquiry_funct = MCPFunctionModel.scan
     count_funct = MCPFunctionModel.count
+    the_filters = None
 
     if partition_key:
         args = [partition_key, None]
@@ -194,7 +193,6 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
             inquiry_funct = MCPFunctionModel.mcp_type_index.query
             args[1] = MCPFunctionModel.mcp_type == mcp_type
             count_funct = MCPFunctionModel.mcp_type_index.count
-    the_filters = None
 
     if description:
         the_filters &= MCPFunctionModel.description.contains(description)
@@ -206,12 +204,6 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
         the_filters &= MCPFunctionModel.function_name == function_name
     if the_filters is not None:
         args.append(the_filters)
-
-    info.context.get("logger").info(
-        f">>>>> Inquiry Function {'>' * 80} {inquiry_funct}"
-    )
-    info.context.get("logger").info(f">>>>> Count Function {'>' * 80} {count_funct}")
-    info.context.get("logger").info(f">>>>> Argments {'>' * 80} {args}")
 
     return inquiry_funct, count_funct, args
 
