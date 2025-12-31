@@ -296,7 +296,12 @@ class Config:
 
                 cls.mcp_core = MCPCore(logger, **setting)
             except Exception as e:
-                print(e)
+                if logger:
+                    logger.error(e)
+                else:
+                    print(e)
+
+                raise
 
     @classmethod
     def _initialize_aws_services(
@@ -402,16 +407,14 @@ class Config:
             )
             response = Serializer.json_loads(response.get("body", response))
 
-            cls.logger.info(f"Request MCP Function List: {'>' * 20}{response}")
-            print(f"Request MCP Function List: {'>' * 20}{response}")
-
             if "errors" in response:
                 cls.logger.error(
                     f"GraphQL errors in MCP_FUNCTION_LIST: {response['errors']}"
                 )
                 raise Exception(f"Failed to fetch MCP functions: {response['errors']}")
+            elif "data" in response:
+                response = response.get("data", {})
 
-            print(f"Request MCP Function List: {'>' * 20}{response}")
             cls.logger.info(f"Request MCP Function List: {'>' * 20}{response}")
 
             if not response.get("mcpFunctionList", {}).get("mcpFunctionList"):
