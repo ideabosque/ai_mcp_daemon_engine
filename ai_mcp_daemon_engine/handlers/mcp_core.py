@@ -29,6 +29,7 @@ class MCPCore(Graphql):
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         try:
+            print(f">> mcp_core_graphql {'#'}*80 {params}")
             schema = Schema(
                 query=Query,
                 mutation=Mutations,
