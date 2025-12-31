@@ -16,7 +16,7 @@ from .schema import Mutations, Query, type_class
 
 class MCPCore(Graphql):
     def __init__(self, logger: logging.Logger, **setting: Dict[str, Any]) -> None:
-        Graphql.__init__(self, logger, **setting)
+        super().__init__(logger, **setting)
 
         if (
             setting.get("region_name")
@@ -28,7 +28,6 @@ class MCPCore(Graphql):
             BaseModel.Meta.aws_secret_access_key = setting.get("aws_secret_access_key")
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
-        self.logger.info(f"mcp_core_graphql {'#' * 40}{params}")
         try:
             schema = Schema(
                 query=Query,

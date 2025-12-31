@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import traceback
+
 __author__ = "bibow"
 
 import asyncio
@@ -210,8 +212,6 @@ class Config:
             **setting (Dict[str, Any]): Configuration dictionary.
         """
         try:
-            logger.info(f"initialize {'>>' * 50}{setting}")
-
             cls.logger = logger
             cls.setting = setting
             cls._set_parameters(setting)
@@ -224,6 +224,7 @@ class Config:
 
             if setting.get("initialize_tables"):
                 cls._initialize_tables(logger)
+
             logger.info("Configuration initialized successfully.")
         except Exception as e:
             logger.exception("Failed to initialize configuration.")
@@ -236,7 +237,6 @@ class Config:
         Args:
             setting (Dict[str, Any]): Configuration dictionary.
         """
-        cls.logger.info(f"_set_parameters {'<<' * 50}{setting}")
 
         cls.sse_clients = {}
         cls.user_clients = {}
@@ -286,15 +286,17 @@ class Config:
             logger (logging.Logger): Logger instance for logging
             setting (Dict[str, Any]): Configuration dictionary containing AWS credentials
         """
+
         if all(
             setting.get(k)
             for k in ["region_name", "aws_access_key_id", "aws_secret_access_key"]
         ):
-            from .mcp_core import MCPCore
+            try:
+                from .mcp_core import MCPCore
 
-            logger.info(f"initialize_mcp_core {'=' * 50}{setting}")
-
-            cls.mcp_core = MCPCore(logger, **setting)
+                cls.mcp_core = MCPCore(logger, **setting)
+            except Exception as e:
+                print(e)
 
     @classmethod
     def _initialize_aws_services(

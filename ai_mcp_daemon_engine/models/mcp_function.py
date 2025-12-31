@@ -18,8 +18,6 @@ from pynamodb.attributes import (
     UTCDateTimeAttribute,
 )
 from pynamodb.indexes import AllProjection, LocalSecondaryIndex
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from silvaengine_dynamodb_base import (
     BaseModel,
     delete_decorator,
@@ -29,6 +27,7 @@ from silvaengine_dynamodb_base import (
 )
 from silvaengine_utility import method_cache
 from silvaengine_utility.serializer import Serializer
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..handlers.config import Config
 from ..types.mcp_function import MCPFunctionListType, MCPFunctionType
@@ -56,7 +55,7 @@ class MCPFunctionModel(BaseModel):
     partition_key = UnicodeAttribute(hash_key=True)
     name = UnicodeAttribute(range_key=True)
     mcp_type = UnicodeAttribute()
-    description = UnicodeAttribute(null=True)
+    desc = UnicodeAttribute(attr_name="description", null=True)
     data = MapAttribute()
     annotations = UnicodeAttribute(null=True)
     module_name = UnicodeAttribute(null=True)
@@ -147,7 +146,10 @@ def get_mcp_function_type(
     info: ResolveInfo, mcp_function: MCPFunctionModel
 ) -> MCPFunctionType:
     try:
-        mcp_function = mcp_function.__dict__["attribute_values"]
+        mcp_function = {}
+
+        if mcp_function:
+            mcp_function = mcp_function.__dict__["attribute_values"]
     except Exception as e:
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
@@ -218,7 +220,6 @@ def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> An
 )
 @purge_cache()
 def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-
     partition_key = kwargs.get("partition_key")
     name = kwargs.get("name")
 
@@ -284,6 +285,5 @@ def insert_update_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> N
 )
 @purge_cache()
 def delete_mcp_function(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-
     kwargs["entity"].delete()
     return True

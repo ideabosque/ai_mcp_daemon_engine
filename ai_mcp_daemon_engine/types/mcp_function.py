@@ -5,7 +5,6 @@ from __future__ import print_function
 __author__ = "bibow"
 
 from graphene import Boolean, DateTime, Int, List, ObjectType, String
-
 from silvaengine_dynamodb_base import ListObjectType
 from silvaengine_utility import JSON
 
@@ -14,7 +13,7 @@ class MCPFunctionType(ObjectType):
     partition_key = String()
     name = String()
     mcp_type = String()
-    description = String()
+    description = String(name="description")
     data = JSON()
     annotations = String()
     module_name = String()
