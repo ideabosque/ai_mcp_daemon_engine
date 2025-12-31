@@ -18,8 +18,6 @@ from pynamodb.attributes import (
     UTCDateTimeAttribute,
 )
 from pynamodb.indexes import AllProjection, LocalSecondaryIndex
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from silvaengine_dynamodb_base import (
     BaseModel,
     delete_decorator,
@@ -29,6 +27,7 @@ from silvaengine_dynamodb_base import (
 )
 from silvaengine_utility import method_cache
 from silvaengine_utility.serializer import Serializer
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..handlers.config import Config
 from ..types.mcp_module import MCPModuleListType, MCPModuleType
@@ -195,20 +194,23 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     partition_key = info.context["partition_key"]
     package_name = kwargs.get("package_name")
     module_name = kwargs.get("module_name")
-
+    the_filters = None
     args = []
     inquiry_funct = MCPModuleModel.scan
     count_funct = MCPModuleModel.count
+
     if partition_key:
         args = [partition_key, None]
         inquiry_funct = MCPModuleModel.query
+
         if package_name:
             inquiry_funct = MCPModuleModel.mcp_package_index.query
             args[1] = MCPModuleModel.package_name == package_name
             count_funct = MCPModuleModel.mcp_package_index.count
-    the_filters = None
+
     if module_name:
         the_filters &= MCPModuleModel.module_name.contains(module_name)
+
     if the_filters is not None:
         args.append(the_filters)
 
@@ -227,7 +229,6 @@ def resolve_mcp_module_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
 )
 @purge_cache()
 def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> None:
-
     partition_key = kwargs.get("partition_key")
     module_name = kwargs.get("module_name")
 
@@ -281,6 +282,5 @@ def insert_update_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Non
 )
 @purge_cache()
 def delete_mcp_module(info: ResolveInfo, **kwargs: Dict[str, Any]) -> bool:
-
     kwargs["entity"].delete()
     return True

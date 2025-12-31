@@ -55,7 +55,7 @@ class MCPFunctionModel(BaseModel):
     partition_key = UnicodeAttribute(hash_key=True)
     name = UnicodeAttribute(range_key=True)
     mcp_type = UnicodeAttribute()
-    desc = UnicodeAttribute(attr_name="description", null=True)
+    description = UnicodeAttribute(attr_name="description", null=True)
     data = MapAttribute()
     annotations = UnicodeAttribute(null=True)
     module_name = UnicodeAttribute(null=True)
@@ -146,20 +146,15 @@ def get_mcp_function_type(
     info: ResolveInfo, mcp_function: MCPFunctionModel
 ) -> MCPFunctionType:
     try:
-        attribute_values = mcp_function.__dict__["attribute_values"]
-        info.context.get("logger").info(
-            f"get_mcp_function_type model: {'>' * 80} {mcp_function}"
+        return MCPFunctionType(
+            **Serializer.json_normalize(
+                mcp_function.__dict__["attribute_values"],
+            )
         )
-        info.context.get("logger").info(
-            f"get_mcp_function_type attributes: {'>' * 80} {attribute_values}"
-        )
-        mcp_function = mcp_function.__dict__["attribute_values"]
     except Exception as e:
         log = traceback.format_exc()
         info.context.get("logger").exception(log)
         raise e
-
-    return MCPFunctionType(**Serializer.json_normalize(mcp_function))
 
 
 def resolve_mcp_function(
@@ -183,7 +178,7 @@ def resolve_mcp_function(
 def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     partition_key = info.context["partition_key"]
     mcp_type = kwargs.get("mcp_type")
-    description = kwargs.get("description")
+    description = kwargs.get("desc")
     module_name = kwargs.get("module_name")
     class_name = kwargs.get("class_name")
     function_name = kwargs.get("function_name")
