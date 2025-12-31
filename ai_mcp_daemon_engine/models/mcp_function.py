@@ -176,6 +176,7 @@ def resolve_mcp_function(
     type_funct=get_mcp_function_type,
 )
 def resolve_mcp_function_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
+    info.context.get("logger").info(f">>>>>>>>>>{info.context}")
     partition_key = info.context["partition_key"]
     mcp_type = kwargs.get("mcp_type")
     description = kwargs.get("description")
