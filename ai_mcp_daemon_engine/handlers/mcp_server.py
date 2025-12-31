@@ -70,10 +70,9 @@ async def call_tool(
             raise ValueError(
                 "Async tools are not supported with default partition_key - please provide a specific partition_key"
             )
-        print(f"{'>' * 80} async_execute_tool_function")
+
         return async_execute_tool_function(partition_key, name, arguments)
 
-    print(f"{'>' * 80} execute_tool_function")
     return execute_tool_function(partition_key, name, arguments)
 
 

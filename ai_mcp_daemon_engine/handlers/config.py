@@ -515,9 +515,9 @@ class Config:
     ) -> List[Dict[str, Any]]:
         """Fetch module and setting information efficiently."""
         modules_info = []
-
         # Group by module to reduce GraphQL calls
         modules_classes = {}
+
         for link in module_links:
             module_name = link.get("module_name")
             class_name = link.get("class_name")
@@ -554,6 +554,8 @@ class Config:
                             f"Error fetching module {module_name}: {module_response['errors']}"
                         )
                     continue
+                elif "data" in module_response:
+                    module_response = module_response.get("data", {})
 
                 module_data = module_response.get("mcpModule")
                 if not module_data:
@@ -611,6 +613,9 @@ class Config:
                                 )
                             setting_data = {}
                         else:
+                            if "data" in setting_data:
+                                setting_data = setting_data.get("data", {})
+
                             setting_data = setting_response.get("mcpSetting", {}).get(
                                 "setting", {}
                             )

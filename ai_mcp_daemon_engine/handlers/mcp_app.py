@@ -543,6 +543,7 @@ async def mcp_core_graphql(endpoint_id: str, request: Request) -> Dict:
     if is_config_mutation and "errors" not in result:
         try:
             Config.clear_mcp_configuration_cache(endpoint_id)
+
             if Config.logger:
                 Config.logger.info(
                     f"Cleared MCP configuration cache for {endpoint_id} after mutation"
