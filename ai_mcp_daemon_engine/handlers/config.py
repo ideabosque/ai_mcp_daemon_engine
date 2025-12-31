@@ -415,8 +415,6 @@ class Config:
             elif "data" in response:
                 response = response.get("data", {})
 
-            cls.logger.info(f"Request MCP Function List: {'>' * 20}{response}")
-
             if not response.get("mcpFunctionList", {}).get("mcpFunctionList"):
                 cls.logger.warning(
                     f"No MCP functions found for partition_key: {partition_key}"

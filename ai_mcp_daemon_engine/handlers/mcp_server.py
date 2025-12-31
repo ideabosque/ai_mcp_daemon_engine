@@ -6,7 +6,7 @@ __author__ = "bibow"
 
 import logging
 import sys
-from typing import Any, Dict, List, Optional, Union, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -52,6 +52,7 @@ async def call_tool(
 
     config = get_mcp_configuration_with_retry(partition_key)
     tools = config["tools"]
+
     if not any(tool["name"] == name for tool in tools):
         raise ValueError(f"Unknown tool: {name}")
 
@@ -63,13 +64,16 @@ async def call_tool(
         ),
         {},
     )
+
     if module_link.get("is_async", False):
         if partition_key == "default":
             raise ValueError(
                 "Async tools are not supported with default partition_key - please provide a specific partition_key"
             )
+        print(f"{'>' * 80} async_execute_tool_function")
         return async_execute_tool_function(partition_key, name, arguments)
 
+    print(f"{'>' * 80} execute_tool_function")
     return execute_tool_function(partition_key, name, arguments)
 
 

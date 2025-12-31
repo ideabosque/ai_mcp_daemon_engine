@@ -212,6 +212,8 @@ def _insert_update_mcp_function_call(
     if "errors" in response:
         Config.logger.error(f"GraphQL error: {response['errors']}")
         raise Exception(response["errors"])
+    elif "data" in response:
+        response = response.get("data", {})
 
     mcp_function_call = response["insertUpdateMcpFunctionCall"]["mcpFunctionCall"]
 
@@ -530,6 +532,7 @@ def execute_tool_function(
     mcp_function_call_uuid: str = None,
 ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
     try:
+        print(f"{'>' * 80} execute_tool")
         config = get_mcp_configuration_with_retry(partition_key)
         tool = next(
             (tool for tool in config["tools"] if tool["name"] == name),
@@ -550,7 +553,6 @@ def execute_tool_function(
             ),
             {},
         )
-
         module = next(
             (
                 module
