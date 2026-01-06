@@ -407,13 +407,17 @@ class Config:
             )
             response = Serializer.json_loads(response.get("body", response))
 
-            if "errors" in response:
+            if "data" in response:
+                response = response.get("data", {})
+            elif "errors" in response:
+                import traceback
+
                 cls.logger.error(
                     f"GraphQL errors in MCP_FUNCTION_LIST: {response['errors']}"
                 )
+
+                traceback.print_exc()
                 raise Exception(f"Failed to fetch MCP functions: {response['errors']}")
-            elif "data" in response:
-                response = response.get("data", {})
 
             if not response.get("mcpFunctionList", {}).get("mcpFunctionList"):
                 cls.logger.warning(
