@@ -127,6 +127,7 @@ async def get_prompt(
 
     config = get_mcp_configuration_with_retry(partition_key)
     prompts = config["prompts"]
+
     if not any(prompt["name"] == name for prompt in prompts):
         raise ValueError(f"Unknown prompt: {name}")
 

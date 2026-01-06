@@ -132,6 +132,10 @@ class AIMCPDaemonEngine(object):
 
         self._apply_partition_defaults(params)
 
+        self.logger.info(f"{'=' * 40} MCP Start{'=' * 40}")
+        self.logger.info(params)
+        self.logger.info(f"{'=' * 40} MCP Start{'=' * 40}")
+
         return HttpResponse.format_response(
             data=asyncio.run(
                 process_mcp_message(
@@ -145,7 +149,6 @@ class AIMCPDaemonEngine(object):
         self._apply_partition_defaults(params)
 
         partition_key = params.pop("partition_key", None)
-
         name = params.get("name", None)
         arguments = params.get("arguments", None)
         mcp_function_call_uuid = params.get("mcp_function_call_uuid", None)
