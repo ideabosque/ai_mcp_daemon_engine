@@ -617,8 +617,8 @@ class Config:
                                 )
                             setting_data = {}
                         else:
-                            if "data" in setting_data:
-                                setting_data = setting_data.get("data", {})
+                            if "data" in setting_response:
+                                setting_response = setting_response.get("data", {})
 
                             setting_data = setting_response.get("mcpSetting", {}).get(
                                 "setting", {}
