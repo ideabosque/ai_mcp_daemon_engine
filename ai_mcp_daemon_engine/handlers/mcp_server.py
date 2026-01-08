@@ -183,7 +183,7 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
             for item in result:
                 if hasattr(item, "model_dump"):
                     # Use Pydantic model serialization if available with JSON mode for proper URL serialization
-                    serialized_content.append(item.model_dump(mode="json"))
+                    serialized_content.append(item.model_dump(mode="json", exclude_none=True))
                 else:
                     # Manual serialization for TextContent, ImageContent, etc.
                     content_dict = {
@@ -202,10 +202,13 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
                     if hasattr(item, "resource"):
                         if hasattr(item.resource, "model_dump"):
                             content_dict["resource"] = item.resource.model_dump(
-                                mode="json"
+                                mode="json", exclude_none=True
                             )
                         else:
                             content_dict["resource"] = item.resource
+                    # Only add annotations if it's not None
+                    if hasattr(item, "annotations") and item.annotations is not None:
+                        content_dict["annotations"] = item.annotations
                     # Add _meta field as empty object if not present
                     content_dict["_meta"] = getattr(item, "_meta", {})
                     serialized_content.append(content_dict)
@@ -294,7 +297,7 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
             for msg in result.messages:
                 # Serialize the content object properly
                 if hasattr(msg.content, "model_dump"):
-                    content_dict = msg.content.model_dump()
+                    content_dict = msg.content.model_dump(mode="json", exclude_none=True)
                 else:
                     content_dict = {
                         "type": msg.content.type,

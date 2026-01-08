@@ -285,16 +285,16 @@ def execute_decorator():
                     content = []
                     for item in result:
                         if isinstance(item, EmbeddedResource):
-                            content.append(item.model_dump())
+                            content.append(item.model_dump(mode="json", exclude_none=True))
                         elif isinstance(item, TextContent):
-                            content.append(item.model_dump())
+                            content.append(item.model_dump(mode="json", exclude_none=True))
                         elif isinstance(item, ImageContent):
-                            content.append(item.model_dump())
+                            content.append(item.model_dump(mode="json", exclude_none=True))
                         else:
                             content.append(item)
                 elif isinstance(result, (ReadResourceResult, GetPromptResult)):
                     # Handle MCP structured result types
-                    content = result.model_dump()
+                    content = result.model_dump(mode="json", exclude_none=True)
                 else:
                     # Handle other types (strings, dicts, etc.)
                     content = result
