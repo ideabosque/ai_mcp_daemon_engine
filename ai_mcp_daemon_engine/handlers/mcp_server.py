@@ -206,6 +206,9 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
                             )
                         else:
                             content_dict["resource"] = item.resource
+                    # Only add annotations if it's not None
+                    if hasattr(item, "annotations") and item.annotations is not None:
+                        content_dict["annotations"] = item.annotations
                     # Add _meta field as empty object if not present
                     content_dict["_meta"] = getattr(item, "_meta", {})
                     serialized_content.append(content_dict)
