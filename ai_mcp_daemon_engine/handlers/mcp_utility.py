@@ -25,6 +25,7 @@ from mcp.types import (
     TextContent,
     TextResourceContents,
 )
+
 from silvaengine_utility.invoker import Invoker
 from silvaengine_utility.serializer import Serializer
 
@@ -285,11 +286,17 @@ def execute_decorator():
                     content = []
                     for item in result:
                         if isinstance(item, EmbeddedResource):
-                            content.append(item.model_dump(mode="json", exclude_none=True))
+                            content.append(
+                                item.model_dump(mode="json", exclude_none=True)
+                            )
                         elif isinstance(item, TextContent):
-                            content.append(item.model_dump(mode="json", exclude_none=True))
+                            content.append(
+                                item.model_dump(mode="json", exclude_none=True)
+                            )
                         elif isinstance(item, ImageContent):
-                            content.append(item.model_dump(mode="json", exclude_none=True))
+                            content.append(
+                                item.model_dump(mode="json", exclude_none=True)
+                            )
                         else:
                             content.append(item)
                 elif isinstance(result, (ReadResourceResult, GetPromptResult)):
@@ -577,18 +584,20 @@ def execute_tool_function(
         if tool_class is None:
             raise Exception(f"Failed to load tool class: {module['class_name']}")
 
-        tool = tool_class(Config.logger, **Serializer.json_normalize(module["setting"]))
+        tool_obj = tool_class(
+            Config.logger, **Serializer.json_normalize(module["setting"])
+        )
 
-        if hasattr(tool, "endpoint_id") and hasattr(tool, "part_id"):
+        if hasattr(tool_obj, "endpoint_id") and hasattr(tool_obj, "part_id"):
             if "#" in partition_key:
                 keys = partition_key.split("#")
-                tool.endpoint_id = keys[0]
-                tool.part_id = keys[1]
+                tool_obj.endpoint_id = keys[0]
+                tool_obj.part_id = keys[1]
             else:
-                tool.endpoint_id = partition_key
-                tool.part_id = partition_key
+                tool_obj.endpoint_id = partition_key
+                tool_obj.part_id = partition_key
 
-        tool_function = getattr(tool, module_link["function_name"])
+        tool_function = getattr(tool_obj, module_link["function_name"])
 
         if module_link.get("is_async", False):
             if Config.aws_lambda:
@@ -735,13 +744,21 @@ def execute_resource_function(
         if resource_class is None:
             raise Exception(f"Failed to load resource class: {module['class_name']}")
 
-        resource_function = getattr(
-            resource_class(
-                Config.logger,
-                **Serializer.json_normalize(module["setting"]),
-            ),
-            module_link["function_name"],
+        resource_obj = resource_class(
+            Config.logger,
+            **Serializer.json_normalize(module["setting"]),
         )
+
+        if hasattr(resource_obj, "endpoint_id") and hasattr(resource_obj, "part_id"):
+            if "#" in partition_key:
+                keys = partition_key.split("#")
+                resource_obj.endpoint_id = keys[0]
+                resource_obj.part_id = keys[1]
+            else:
+                resource_obj.endpoint_id = partition_key
+                resource_obj.part_id = partition_key
+
+        resource_function = getattr(resource_obj, module_link["function_name"])
 
         result = resource_function(uri)
 
@@ -808,16 +825,21 @@ def execute_prompt_function(
         if prompt_class is None:
             raise Exception(f"Failed to load prompt class: {module['class_name']}")
 
-        prompt_function = getattr(
-            prompt_class(
-                Config.logger,
-                **Serializer.json_normalize(module["setting"]),
-            ),
-            module_link["function_name"],
+        prompt_obj = prompt_class(
+            Config.logger,
+            **Serializer.json_normalize(module["setting"]),
         )
 
-        if "partition_key" not in arguments:
-            arguments["partition_key"] = partition_key
+        if hasattr(prompt_obj, "endpoint_id") and hasattr(prompt_obj, "part_id"):
+            if "#" in partition_key:
+                keys = partition_key.split("#")
+                prompt_obj.endpoint_id = keys[0]
+                prompt_obj.part_id = keys[1]
+            else:
+                prompt_obj.endpoint_id = partition_key
+                prompt_obj.part_id = partition_key
+
+        prompt_function = getattr(prompt_obj, module_link["function_name"])
 
         result = prompt_function(name, **arguments)
 
