@@ -29,11 +29,14 @@ class MCPCore(Graphql):
 
     def mcp_core_graphql(self, **params: Dict[str, Any]) -> Any:
         try:
-            schema = Schema(
-                query=Query,
-                mutation=Mutations,
-                types=type_class(),
-            )
-            return self.execute(schema, **params)
+            return self.execute(self.__class__.build_graphql_schema(), **params)
         except Exception as e:
             raise e
+
+    @staticmethod
+    def build_graphql_schema() -> Schema:
+        return Schema(
+            query=Query,
+            mutation=Mutations,
+            types=type_class(),
+        )
