@@ -11,7 +11,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from silvaengine_utility import Graphql, HttpResponse, Serializer
+from silvaengine_utility import Graphql, HttpResponse, Invoker, Serializer
 
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
@@ -144,12 +144,8 @@ class AIMCPDaemonEngine(object):
 
         self._apply_partition_defaults(params)
 
-        self.logger.info(f"{'=' * 40} MCP Start{'=' * 40}")
-        self.logger.info(params)
-        self.logger.info(f"{'=' * 40} MCP Start{'=' * 40}")
-
         return HttpResponse.format_response(
-            data=asyncio.run(
+            data=Invoker.sync_call_async_compatible(
                 process_mcp_message(
                     str(params.get("partition_key", "")).strip(),
                     params,
@@ -212,10 +208,10 @@ class AIMCPDaemonEngine(object):
                     loop="asyncio",
                 )
                 server = uvicorn.Server(config)
-                asyncio.run(server.serve())
+                Invoker.sync_call_async_compatible(server.serve())
             else:
                 self.logger.info("Running in stdio mode...")
-                asyncio.run(run_stdio(self.logger))
+                Invoker.sync_call_async_compatible(run_stdio(self.logger))
         except KeyboardInterrupt:
             self.logger.info("Daemon interrupted by user.")
         except Exception as e:
