@@ -5,7 +5,6 @@ from __future__ import print_function
 __author__ = "bibow"
 
 import functools
-import logging
 import traceback
 from typing import Any, Dict
 
@@ -91,15 +90,6 @@ def purge_cache():
     return actual_decorator
 
 
-def create_mcp_setting_table(logger: logging.Logger) -> bool:
-    """Create the MCP Setting table if it doesn't exist."""
-    if not MCPSettingModel.exists():
-        # Create with on-demand billing (PAY_PER_REQUEST)
-        MCPSettingModel.create_table(billing_mode="PAY_PER_REQUEST", wait=True)
-        logger.info("The MCP Setting table has been created.")
-    return True
-
-
 @retry(
     reraise=True,
     wait=wait_exponential(multiplier=1, max=60),
@@ -108,6 +98,7 @@ def create_mcp_setting_table(logger: logging.Logger) -> bool:
 @method_cache(
     ttl=Config.get_cache_ttl(),
     cache_name=Config.get_cache_name("models", "mcp_setting"),
+    cache_enabled=Config.is_cache_enabled,
 )
 def get_mcp_setting(partition_key: str, setting_id: str) -> MCPSettingModel:
     return MCPSettingModel.get(partition_key, setting_id)

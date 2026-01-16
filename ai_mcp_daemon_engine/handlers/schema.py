@@ -109,7 +109,7 @@ class Query(ObjectType):
 
     def resolve_mcp_function(
         self, info: ResolveInfo, **kwargs: Dict[str, Any]
-    ) -> MCPFunctionType:
+    ) -> MCPFunctionType | None:
         return resolve_mcp_function(info, **kwargs)
 
     def resolve_mcp_function_list(
@@ -119,7 +119,7 @@ class Query(ObjectType):
 
     def resolve_mcp_function_call(
         self, info: ResolveInfo, **kwargs: Dict[str, Any]
-    ) -> MCPFunctionCallType:
+    ) -> MCPFunctionCallType | None:
         return resolve_mcp_function_call(info, **kwargs)
 
     def resolve_mcp_function_call_list(
@@ -129,7 +129,7 @@ class Query(ObjectType):
 
     def resolve_mcp_module(
         self, info: ResolveInfo, **kwargs: Dict[str, Any]
-    ) -> MCPModuleType:
+    ) -> MCPModuleType | None:
         return resolve_mcp_module(info, **kwargs)
 
     def resolve_mcp_module_list(
@@ -139,7 +139,7 @@ class Query(ObjectType):
 
     def resolve_mcp_setting(
         self, info: ResolveInfo, **kwargs: Dict[str, Any]
-    ) -> MCPSettingType:
+    ) -> MCPSettingType | None:
         return resolve_mcp_setting(info, **kwargs)
 
     def resolve_mcp_setting_list(
