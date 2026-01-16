@@ -18,11 +18,15 @@ from ..types.mcp_function import MCPFunctionListType, MCPFunctionType
 
 def resolve_mcp_function(
     info: ResolveInfo, **kwargs: Dict[str, Any]
-) -> MCPFunctionType:
+) -> MCPFunctionType | None:
     return mcp_function.resolve_mcp_function(info, **kwargs)
 
 
-@method_cache(ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name('queries', 'mcp_function'))
+@method_cache(
+    ttl=Config.get_cache_ttl(),
+    cache_name=Config.get_cache_name("queries", "mcp_function"),
+    cache_enabled=Config.is_cache_enabled,
+)
 def resolve_mcp_function_list(
     info: ResolveInfo, **kwargs: Dict[str, Any]
 ) -> MCPFunctionListType:

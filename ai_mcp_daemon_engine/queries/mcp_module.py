@@ -18,11 +18,15 @@ from ..types.mcp_module import MCPModuleListType, MCPModuleType
 
 def resolve_mcp_module(
     info: ResolveInfo, **kwargs: Dict[str, Any]
-) -> MCPModuleType:
+) -> MCPModuleType | None:
     return mcp_module.resolve_mcp_module(info, **kwargs)
 
 
-@method_cache(ttl=Config.get_cache_ttl(), cache_name=Config.get_cache_name('queries', 'mcp_module'))
+@method_cache(
+    ttl=Config.get_cache_ttl(),
+    cache_name=Config.get_cache_name("queries", "mcp_module"),
+    cache_enabled=Config.is_cache_enabled,
+)
 def resolve_mcp_module_list(
     info: ResolveInfo, **kwargs: Dict[str, Any]
 ) -> MCPModuleListType:

@@ -254,6 +254,9 @@ class Config:
         cls.cognito_app_secret = setting.get("cognito_app_secret", None)
         cls.jwks_cache_ttl = int(setting.get("jwks_cache_ttl", 3600))
 
+        if "cache_enabled" in setting:
+            cls.CACHE_ENABLED = setting.get("cache_enabled", True)
+
         if setting.get("mcp_configuration") is not None:
             cls.mcp_configuration["default"] = setting["mcp_configuration"]
             cls.logger.info("MCP Configuration loaded successfully.")
@@ -357,7 +360,7 @@ class Config:
         Initialize database tables by calling the utils._initialize_tables() method.
         This is an internal method used during configuration setup.
         """
-        utils._initialize_tables(logger)
+        utils.initialize_tables(logger)
 
     @classmethod
     def _load(cls) -> dict[str, LocalUser]:
