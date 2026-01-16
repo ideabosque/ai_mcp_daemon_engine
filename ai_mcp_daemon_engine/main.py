@@ -108,22 +108,36 @@ class AIMCPDaemonEngine(object):
 
     def _apply_partition_defaults(self, params: Dict[str, Any]) -> None:
         """
-        Ensure endpoint_id/part_id defaults and assemble partition_key.
+        Apply default partition values if not provided in params.
+
+        Args:
+            params (Dict[str, Any]): A dictionary of parameters required to build the GraphQL query.
         """
-        if params.get("endpoint_id") is None:
-            params["endpoint_id"] = self.setting.get("endpoint_id")
-
-        part_id = params.get("metadata", {}).get("part_id", self.setting.get("part_id"))
-
-        endpoint_id = params.get("endpoint_id")
-        params["partition_key"] = f"{endpoint_id}"
+        endpoint_id = params.get("endpoint_id", self.setting.get("endpoint_id"))
+        part_id = params.get("metadata", {}).get(
+            "part_id",
+            params.get("part_id", self.setting.get("part_id")),
+        )
 
         if params.get("context") is None:
             params["context"] = {}
 
-        if part_id:
-            params["context"]["partition_key"] = f"{endpoint_id}#{part_id}"
-            params["partition_key"] = f"{endpoint_id}#{part_id}"
+        if "endpoint_id" not in params["context"]:
+            params["context"]["endpoint_id"] = endpoint_id
+        if "part_id" not in params["context"]:
+            params["context"]["part_id"] = part_id
+
+        if "partition_key" not in params["context"]:
+            # Validate endpoint_id and part_id before creating partition_key
+            if not endpoint_id or not part_id:
+                self.logger.error(
+                    f"Missing endpoint_id or part_id: endpoint_id={endpoint_id}, part_id={part_id}"
+                )
+                raise ValueError(
+                    "Both 'endpoint_id' and 'part_id' are required to generate 'partition_key'."
+                )
+            else:
+                params["context"]["partition_key"] = f"{endpoint_id}#{part_id}"
 
     def mcp(self, **params: Dict[str, Any]) -> Dict[str, Any]:
         from .handlers.mcp_server import process_mcp_message
