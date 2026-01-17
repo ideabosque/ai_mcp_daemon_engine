@@ -152,6 +152,7 @@ class AIMCPDaemonEngine(object):
         Debugger.info(
             variable=f"Partition key: {partition_key}, Name: {name}, Arguments: {arguments}, MCP function call uuid: {mcp_function_call_uuid}",
             stage=f"{__name__}:async_execute_tool_function",
+            delimiter="*",
         )
 
         if name is None or arguments is None or mcp_function_call_uuid is None:
