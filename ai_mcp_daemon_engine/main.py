@@ -11,7 +11,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from silvaengine_utility import Graphql, HttpResponse, Invoker, Serializer
+from silvaengine_utility import Graphql, HttpResponse, Invoker, Serializer, Debugger
 
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio

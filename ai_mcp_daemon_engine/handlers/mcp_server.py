@@ -8,6 +8,7 @@ import logging
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+from silvaengine_utility import Debugger
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
