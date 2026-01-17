@@ -113,7 +113,9 @@ class AIMCPDaemonEngine(object):
         if params.get("endpoint_id") is None:
             params["endpoint_id"] = self.setting.get("endpoint_id")
 
-        part_id = params.get("metadata", {}).get("part_id", self.setting.get("part_id"))
+        part_id = params.get("custom_headers", {}).get(
+            "part_id", self.setting.get("part_id")
+        )
 
         endpoint_id = params.get("endpoint_id")
         params["partition_key"] = f"{endpoint_id}"
