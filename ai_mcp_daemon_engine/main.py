@@ -146,6 +146,12 @@ class AIMCPDaemonEngine(object):
         name = params.get("name", None)
         arguments = params.get("arguments", None)
         mcp_function_call_uuid = params.get("mcp_function_call_uuid", None)
+
+        Debugger.info(
+            variable=f"Partition key: {partition_key}, Name: {name}, Arguments: {arguments}, MCP function call uuid: {mcp_function_call_uuid}",
+            stage=f"{__name__}:async_execute_tool_function",
+        )
+
         if name is None or arguments is None or mcp_function_call_uuid is None:
             raise ValueError(
                 "Missing required parameters: name, arguments and mcp_function_call_uuid must be provided"
