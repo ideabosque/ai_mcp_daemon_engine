@@ -142,6 +142,12 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
         params = message.get("params", {})
         msg_id = message.get("id")
 
+        Debugger.info(
+            variable=f"Partition Key: {partition_key}, Message: {message}, Parameters: {params}",
+            stage=f"{__name__}:mcp",
+            delimiter="=",
+        )
+
         if method == "initialize":
             return {
                 "jsonrpc": "2.0",

@@ -132,6 +132,12 @@ class AIMCPDaemonEngine(object):
 
         self._apply_partition_defaults(params)
 
+        Debugger.info(
+            variable=params,
+            stage=f"{__name__}:mcp",
+            delimiter="=",
+        )
+
         return HttpResponse.format_response(
             data=Invoker.sync_call_async_compatible(
                 process_mcp_message(

@@ -368,7 +368,8 @@ class Config:
 
         with p.open("r", encoding="utf-8") as f:
             raw = json.load(f)
-        return {u["username"]: LocalUser(**u) for u in raw}
+
+        return {u["username"]: LocalUser(**u) for u in raw if isinstance(u, dict) and "username" in u}
 
     # Fetches and caches GraphQL schema for a given function
     @classmethod
