@@ -11,7 +11,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from silvaengine_utility import Graphql, HttpResponse, Invoker, Serializer, Debugger
+from silvaengine_utility import Debugger, Graphql, HttpResponse, Invoker, Serializer
 
 from .handlers.config import Config
 from .handlers.mcp_server import run_stdio
@@ -113,9 +113,7 @@ class AIMCPDaemonEngine(object):
         if params.get("endpoint_id") is None:
             params["endpoint_id"] = self.setting.get("endpoint_id")
 
-        part_id = params.get("metadata", {}).get(
-            "part_id", self.setting.get("part_id")
-        )
+        part_id = params.get("metadata", {}).get("part_id", self.setting.get("part_id"))
         endpoint_id = params.get("endpoint_id")
         params["partition_key"] = f"{endpoint_id}"
 
@@ -130,12 +128,6 @@ class AIMCPDaemonEngine(object):
         from .handlers.mcp_server import process_mcp_message
 
         self._apply_partition_defaults(params)
-
-        Debugger.info(
-            variable=params,
-            stage=f"{__name__}:mcp",
-            delimiter="=",
-        )
 
         return HttpResponse.format_response(
             data=Invoker.sync_call_async_compatible(
@@ -153,12 +145,6 @@ class AIMCPDaemonEngine(object):
         name = params.get("name", None)
         arguments = params.get("arguments", None)
         mcp_function_call_uuid = params.get("mcp_function_call_uuid", None)
-
-        Debugger.info(
-            variable=f"Partition key: {partition_key}, Name: {name}, Arguments: {arguments}, MCP function call uuid: {mcp_function_call_uuid}",
-            stage=f"{__name__}:async_execute_tool_function",
-            delimiter="*",
-        )
 
         if name is None or arguments is None or mcp_function_call_uuid is None:
             raise ValueError(

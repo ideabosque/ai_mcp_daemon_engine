@@ -8,7 +8,6 @@ import logging
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-from silvaengine_utility import Debugger
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
@@ -21,6 +20,7 @@ from mcp.types import (
     TextContent,
     Tool,
 )
+from silvaengine_utility import Debugger
 
 from .mcp_utility import (
     async_execute_tool_function,
@@ -143,12 +143,6 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
         params = message.get("params", {})
         msg_id = message.get("id")
 
-        Debugger.info(
-            variable=f"Partition Key: {partition_key}, Message: {message}, Parameters: {params}",
-            stage=f"{__name__}:mcp",
-            delimiter="=",
-        )
-
         if method == "initialize":
             return {
                 "jsonrpc": "2.0",
@@ -190,7 +184,9 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
             for item in result:
                 if hasattr(item, "model_dump"):
                     # Use Pydantic model serialization if available with JSON mode for proper URL serialization
-                    serialized_content.append(item.model_dump(mode="json", exclude_none=True))
+                    serialized_content.append(
+                        item.model_dump(mode="json", exclude_none=True)
+                    )
                 else:
                     # Manual serialization for TextContent, ImageContent, etc.
                     content_dict = {
@@ -304,7 +300,9 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
             for msg in result.messages:
                 # Serialize the content object properly
                 if hasattr(msg.content, "model_dump"):
-                    content_dict = msg.content.model_dump(mode="json", exclude_none=True)
+                    content_dict = msg.content.model_dump(
+                        mode="json", exclude_none=True
+                    )
                 else:
                     content_dict = {
                         "type": msg.content.type,
