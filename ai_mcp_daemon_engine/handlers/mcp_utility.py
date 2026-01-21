@@ -542,6 +542,12 @@ def execute_tool_function(
 ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
     try:
         config = get_mcp_configuration_with_retry(partition_key)
+
+        Debugger.info(
+            variable=config,
+            stage=f"{__name__}:execute_tool_function:config"
+        )
+
         tool = next(
             (tool for tool in config["tools"] if tool["name"] == name),
             {},
