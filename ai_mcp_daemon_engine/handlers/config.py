@@ -619,7 +619,7 @@ class Config:
                             )
                         continue
 
-                    setting_id = matching_class.get("setting_id")
+                    setting_id = matching_class.get("settingId")
 
                     if setting_id:
                         setting_ids.append(setting_id)
@@ -661,7 +661,7 @@ class Config:
                             "module_name": module_name,
                             "package_name": module_data.get("packageName", module_name),
                             "class_name": class_name,
-                            "setting": setting_data,
+                            "setting": JSONSnakeCase.serialize(setting_data),
                             "source": module_data.get("source", ""),
                         }
 
