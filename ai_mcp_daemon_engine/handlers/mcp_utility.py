@@ -26,8 +26,7 @@ from mcp.types import (
     TextResourceContents,
 )
 
-from silvaengine_utility.invoker import Invoker
-from silvaengine_utility.serializer import Serializer
+from silvaengine_utility import Invoker, Debugger, Serializer
 
 from .config import Config
 
@@ -572,6 +571,11 @@ def execute_tool_function(
                 )
             ),
             {},
+        )
+
+        Debugger.info(
+            variable=module,
+            stage=f"{__name__}: execute_tool_function"
         )
 
         tool_class = _get_class(
