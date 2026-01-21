@@ -532,6 +532,11 @@ class Config:
         # Group by module to reduce GraphQL calls
         modules_classes = {}
 
+        Debugger.info(
+            variable=f"Partition key: {partition_key}, Module links: {module_links}",
+            stage=f"{__name__}:_fetch_modules_and_settings-1"
+        )
+
         for link in module_links:
             module_name = link.get("module_name")
             class_name = link.get("class_name")
@@ -546,6 +551,11 @@ class Config:
             if module_name not in modules_classes:
                 modules_classes[module_name] = set()
             modules_classes[module_name].add(class_name)
+
+        Debugger.info(
+            variable=modules_classes,
+            stage=f"{__name__}:_fetch_modules_and_settings-2"
+        )
 
         # Process each module
         for module_name, class_names in modules_classes.items():
@@ -572,6 +582,12 @@ class Config:
                     module_response = module_response.get("data", {})
 
                 module_data = module_response.get("mcpModule")
+
+                Debugger.info(
+                    variable=module_data,
+                    stage=f"{__name__}:_fetch_modules_and_settings-3"
+                )
+
                 if not module_data:
                     if cls.logger:
                         cls.logger.warning(f"No data found for module: {module_name}")
@@ -591,6 +607,11 @@ class Config:
                         None,
                     )
 
+                    Debugger.info(
+                        variable=matching_class,
+                        stage=f"{__name__}:_fetch_modules_and_settings-4"
+                    )
+
                     if not matching_class:
                         if cls.logger:
                             cls.logger.warning(
@@ -599,6 +620,7 @@ class Config:
                         continue
 
                     setting_id = matching_class.get("setting_id")
+
                     if setting_id:
                         setting_ids.append(setting_id)
                         class_to_setting_map[class_name] = {
@@ -642,9 +664,19 @@ class Config:
                             "setting": setting_data,
                             "source": module_data.get("source", ""),
                         }
+
+                        Debugger.info(
+                            variable=module_info,
+                            stage=f"{__name__}:_fetch_modules_and_settings-5"
+                        )
+
                         modules_info.append(module_info)
 
                     except Exception as e:
+                        Debugger.info(
+                            variable=e,
+                            stage=f"{__name__}:_fetch_modules_and_settings"
+                        )
                         if cls.logger:
                             cls.logger.error(
                                 f"Error processing setting for {module_name}.{class_name}: {e}"
@@ -660,6 +692,10 @@ class Config:
                         modules_info.append(module_info)
 
             except Exception as e:
+                Debugger.info(
+                    variable=e,
+                    stage=f"{__name__}:_fetch_modules_and_settings"
+                )
                 if cls.logger:
                     cls.logger.error(f"Error processing module {module_name}: {e}")
                 continue
