@@ -499,6 +499,7 @@ class Config:
 
         # Safely merge data field
         func_data = func.get("data", {})
+
         if isinstance(func_data, dict):
             base_config.update(func_data)
 

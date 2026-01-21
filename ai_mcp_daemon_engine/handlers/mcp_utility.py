@@ -544,6 +544,11 @@ def execute_tool_function(
         config = get_mcp_configuration_with_retry(partition_key)
 
         Debugger.info(
+            variable=f"Partition key: {partition_key}, Name: {name}, Arguments: {arguments}, MCP function call UUID: {mcp_function_call_uuid}",
+            stage=f"{__name__}:execute_tool_function:config"
+        )
+
+        Debugger.info(
             variable=config,
             stage=f"{__name__}:execute_tool_function:config"
         )
