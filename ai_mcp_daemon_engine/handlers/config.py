@@ -411,11 +411,6 @@ class Config:
             )
             response = Serializer.json_loads(response.get("body", response))
 
-            Debugger.info(
-                variable=response,
-                stage=f"{__name__}:fetch_mcp_configuration"
-            )
-
             if "data" in response:
                 response = response.get("data", {})
             elif "errors" in response:
@@ -532,11 +527,6 @@ class Config:
         # Group by module to reduce GraphQL calls
         modules_classes = {}
 
-        Debugger.info(
-            variable=f"Partition key: {partition_key}, Module links: {module_links}",
-            stage=f"{__name__}:_fetch_modules_and_settings-1"
-        )
-
         for link in module_links:
             module_name = link.get("module_name")
             class_name = link.get("class_name")
@@ -551,11 +541,6 @@ class Config:
             if module_name not in modules_classes:
                 modules_classes[module_name] = set()
             modules_classes[module_name].add(class_name)
-
-        Debugger.info(
-            variable=modules_classes,
-            stage=f"{__name__}:_fetch_modules_and_settings-2"
-        )
 
         # Process each module
         for module_name, class_names in modules_classes.items():
@@ -583,11 +568,6 @@ class Config:
 
                 module_data = module_response.get("mcpModule")
 
-                Debugger.info(
-                    variable=module_data,
-                    stage=f"{__name__}:_fetch_modules_and_settings-3"
-                )
-
                 if not module_data:
                     if cls.logger:
                         cls.logger.warning(f"No data found for module: {module_name}")
@@ -605,11 +585,6 @@ class Config:
                             if c.get("className") == class_name
                         ),
                         None,
-                    )
-
-                    Debugger.info(
-                        variable=matching_class,
-                        stage=f"{__name__}:_fetch_modules_and_settings-4"
                     )
 
                     if not matching_class:
@@ -664,12 +639,6 @@ class Config:
                             "setting": JSONSnakeCase.serialize(setting_data),
                             "source": module_data.get("source", ""),
                         }
-
-                        Debugger.info(
-                            variable=module_info,
-                            stage=f"{__name__}:_fetch_modules_and_settings-5"
-                        )
-
                         modules_info.append(module_info)
 
                     except Exception as e:

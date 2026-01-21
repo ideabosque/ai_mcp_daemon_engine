@@ -586,6 +586,11 @@ def execute_tool_function(
             Config.logger, **Serializer.json_normalize(module["setting"])
         )
 
+        Debugger.info(
+            variable=tool_obj,
+            stage=f"{__name__}:execute_tool_function-5"
+        )
+
         if hasattr(tool_obj, "endpoint_id") and hasattr(tool_obj, "part_id"):
             if "#" in partition_key:
                 keys = partition_key.split("#")
