@@ -586,7 +586,7 @@ class Config:
                         (
                             c
                             for c in module_data.get("classes", [])
-                            if c.get("class_name") == class_name
+                            if c.get("className") == class_name
                         ),
                         None,
                     )
