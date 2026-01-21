@@ -411,6 +411,11 @@ class Config:
             )
             response = Serializer.json_loads(response.get("body", response))
 
+            Debugger.info(
+                variable=response,
+                stage=f"{__name__}:fetch_mcp_configuration"
+            )
+
             if "data" in response:
                 response = response.get("data", {})
             elif "errors" in response:
