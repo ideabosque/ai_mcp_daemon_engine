@@ -7,8 +7,7 @@ import traceback
 from typing import Any, Dict
 
 from graphene import Boolean, Field, Int, List, Mutation, String
-
-from silvaengine_utility import JSON
+from silvaengine_utility import JSONCamelCase
 
 from ..models.mcp_function_call import (
     delete_mcp_function_call,
@@ -24,7 +23,7 @@ class InsertUpdateMcpFunctionCall(Mutation):
         mcp_function_call_uuid = String(required=False)
         name = String(required=False)
         mcp_type = String(required=False)
-        arguments = JSON(required=False)
+        arguments = JSONCamelCase(required=False)
         has_content = Boolean(required=False)
         status = String(required=False)
         notes = String(required=False)

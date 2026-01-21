@@ -7,8 +7,7 @@ import traceback
 from typing import Any, Dict
 
 from graphene import Boolean, Field, Mutation, String
-
-from silvaengine_utility import JSON
+from silvaengine_utility import JSONCamelCase
 
 from ..handlers.mcp_handlers import load_mcp_configuration_into_models
 
@@ -21,8 +20,8 @@ class LoadMcpConfiguration(Mutation):
         package_name = String(required=False)
         module_name = String(required=False)
         source = String(required=False)
-        mcp_configuration = JSON(required=False)
-        variables = JSON(required=False)
+        mcp_configuration = JSONCamelCase(required=False)
+        variables = JSONCamelCase(required=False)
         updated_by = String(required=True)
 
     @staticmethod

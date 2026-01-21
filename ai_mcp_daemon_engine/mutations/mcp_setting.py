@@ -7,8 +7,7 @@ import traceback
 from typing import Any, Dict
 
 from graphene import Boolean, Field, Mutation, String
-
-from silvaengine_utility import JSON
+from silvaengine_utility import JSONCamelCase
 
 from ..models.mcp_setting import delete_mcp_setting, insert_update_mcp_setting
 from ..types.mcp_setting import MCPSettingType
@@ -19,7 +18,7 @@ class InsertUpdateMcpSetting(Mutation):
 
     class Arguments:
         setting_id = String(required=False)
-        setting = JSON(required=False)
+        setting = JSONCamelCase(required=False)
         updated_by = String(required=True)
 
     @staticmethod

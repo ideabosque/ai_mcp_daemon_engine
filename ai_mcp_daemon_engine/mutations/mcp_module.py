@@ -7,8 +7,7 @@ import traceback
 from typing import Any, Dict
 
 from graphene import Boolean, Field, Mutation, String, List
-
-from silvaengine_utility import JSON
+from silvaengine_utility import JSONCamelCase
 
 from ..models.mcp_module import delete_mcp_module, insert_update_mcp_module
 from ..types.mcp_module import MCPModuleType
@@ -20,7 +19,7 @@ class InsertUpdateMcpModule(Mutation):
     class Arguments:
         module_name = String(required=True)
         package_name = String(required=True)
-        classes = List(JSON, required=False)
+        classes = List(JSONCamelCase, required=False)
         source = String(required=False)
         updated_by = String(required=True)
 

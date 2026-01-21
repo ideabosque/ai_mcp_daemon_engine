@@ -6,7 +6,7 @@ __author__ = "bibow"
 
 from graphene import Boolean, DateTime, Int, List, ObjectType, String
 from silvaengine_dynamodb_base import ListObjectType
-from silvaengine_utility import JSON
+from silvaengine_utility import JSONCamelCase
 
 
 class MCPFunctionType(ObjectType):
@@ -14,7 +14,7 @@ class MCPFunctionType(ObjectType):
     name = String()
     mcp_type = String()
     description = String(name="description")
-    data = JSON()
+    data = Field(JSONCamelCase)
     annotations = String()
     module_name = String()
     class_name = String()
