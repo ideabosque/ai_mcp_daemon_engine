@@ -26,7 +26,7 @@ from mcp.types import (
     TextResourceContents,
 )
 
-from silvaengine_utility import Invoker, Debugger, Serializer
+from silvaengine_utility import Debugger, Invoker, Serializer
 
 from .config import Config
 
@@ -113,7 +113,7 @@ INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
 
 MCP_FUNCTION_CALL = """query mcpFunctionCall($mcpFunctionCallUuid: String!) {
     mcpFunctionCall(mcpFunctionCallUuid: $mcpFunctionCallUuid) {
-        endpointId
+        partitionKey
         mcpFunctionCallUuid
         mcpType
         name
@@ -334,7 +334,7 @@ def execute_decorator():
                 if mcp_function_call is not None:
                     Config.logger.info("Updating MCP function call with error status")
                     _insert_update_mcp_function_call(
-                        mcp_function_call["endpointId"],
+                        mcp_function_call["partitionKey"],
                         **{
                             "mcp_function_call_uuid": mcp_function_call[
                                 "mcpFunctionCallUuid"
@@ -593,12 +593,7 @@ def execute_tool_function(
                 tool_obj.part_id = keys[1]
             else:
                 tool_obj.endpoint_id = partition_key
-                tool_obj.part_id = partition_key
-
-        Debugger.info(
-            variable=tool_obj,
-            stage=f"{__name__}:execute_tool_function-5"
-        )
+                tool_obj.part_id = None
 
         tool_function = getattr(tool_obj, module_link["function_name"])
 
@@ -759,7 +754,7 @@ def execute_resource_function(
                 resource_obj.part_id = keys[1]
             else:
                 resource_obj.endpoint_id = partition_key
-                resource_obj.part_id = partition_key
+                resource_obj.part_id = None
 
         resource_function = getattr(resource_obj, module_link["function_name"])
 
@@ -840,7 +835,7 @@ def execute_prompt_function(
                 prompt_obj.part_id = keys[1]
             else:
                 prompt_obj.endpoint_id = partition_key
-                prompt_obj.part_id = partition_key
+                prompt_obj.part_id = None
 
         prompt_function = getattr(prompt_obj, module_link["function_name"])
 
@@ -913,13 +908,22 @@ def async_execute_tool_function(
     if Config.aws_lambda:
         # Invoke Lambda function asynchronously
         Config.logger.info("Invoking Lambda function asynchronously")
+        endpoint_id = (
+            partition_key.split("#")[0] if "#" in partition_key else partition_key
+        )
+        part_id = partition_key.split("#")[1] if "#" in partition_key else None
+        context = {
+            "partition_key": partition_key,
+            "logger": Config.logger,
+            "endpoint_id": endpoint_id,
+            "part_id": part_id,
+            "setting": Config.setting,
+        }
         Invoker.invoke_funct_on_aws_lambda(
-            Config.logger,
-            partition_key,
+            context,
             "async_execute_tool_function",
             params=params,
-            setting=Config.setting,
-            test_mode=Config.setting.get("test_mode"),
+            execute_mode=Config.setting.get("execute_mode"),
             aws_lambda=Config.aws_lambda,
             invocation_type="Event",
         )
