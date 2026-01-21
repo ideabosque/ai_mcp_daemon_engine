@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 import boto3
 from passlib.context import CryptContext
 from pydantic import AnyUrl
-from silvaengine_utility import Serializer, Debugger
+from silvaengine_utility import Serializer, Debugger, JSONSnakeCase
 
 from ..models import utils
 
