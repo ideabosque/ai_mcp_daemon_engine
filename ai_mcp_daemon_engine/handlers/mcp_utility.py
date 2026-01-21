@@ -73,7 +73,7 @@ def wait_for_background_threads(timeout=30):
 
 
 INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
-    $arguments: JSON,
+    $arguments: JSONCamelCase,
     $hasContent: Boolean,
     $mcpFunctionCallUuid: String,
     $mcpType: String,
@@ -467,7 +467,7 @@ def _validate_nested_structure(
     Private function to recursively validate required fields in nested objects and arrays.
 
     Args:
-        schema: JSON schema definition for the data structure
+        schema: JSONCamelCase schema definition for the data structure
         data: The actual data to validate
         field_path: Current field path for error reporting
     """
