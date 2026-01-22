@@ -462,41 +462,33 @@ class Config:
                         f"Unknown MCP function type: {func.get('mcpType')}"
                     )
 
-            if cls.logger:
-                cls.logger.info(
-                    f"Found {len(tools)} tools, {len(resources)} resources, {len(prompts)} prompts"
-                )
+            Debugger.info(
+                variable=f"Found {len(tools)} tools, {len(resources)} resources, {len(prompts)} prompts",
+                stage=f"{__name__}:fetch_mcp_configurations",
+            )
 
             # Step 3: Build initial configuration structure
-            mcp_configuration = {
+            module_links = [
+                cls._build_module_link(func)
+                for func in mcp_functions
+                if func.get("moduleName") and func.get("className")
+            ]
+
+            # Step 5: Cache the configuration
+            cls.mcp_configuration[partition_key] = {
                 "tools": [cls._build_function_config(tool) for tool in tools],
                 "resources": [
                     cls._build_function_config(resource) for resource in resources
                 ],
                 "prompts": [cls._build_function_config(prompt) for prompt in prompts],
-                "module_links": [
-                    cls._build_module_link(func)
-                    for func in mcp_functions
-                    if func.get("moduleName") and func.get("className")
-                ],
-                "modules": [],
+                "module_links": module_links,
+                "modules": cls._fetch_modules_and_settings(
+                    partition_key=partition_key,
+                    module_links=module_links,
+                ),
             }
 
-            # Step 4: Fetch module and setting information
-            modules_info = cls._fetch_modules_and_settings(
-                partition_key, mcp_configuration["module_links"]
-            )
-            mcp_configuration["modules"] = modules_info
-
-            # Step 5: Cache the configuration
-            cls.mcp_configuration[partition_key] = mcp_configuration
-
-            if cls.logger:
-                cls.logger.info(
-                    f"Successfully cached MCP configuration for partition_key: {partition_key}"
-                )
-
-            return mcp_configuration
+            return cls.mcp_configuration[partition_key]
 
         except Exception as e:
             if cls.logger:

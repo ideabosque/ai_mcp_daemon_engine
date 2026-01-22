@@ -6,6 +6,7 @@ __author__ = "bibow"
 
 import logging
 import sys
+import traceback
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from mcp.server import Server
@@ -39,20 +40,12 @@ async def list_tools(partition_key: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    tools = []
-    tool_configs = get_mcp_configuration_with_retry(partition_key).get("tools", tools)
-
-    if isinstance(tool_configs, list) and len(tool_configs) > 0:
-        for tool in tool_configs:
-            if "inputSchema" in tool:
-                Debugger.info(variable=tool, stage=f"{__name__}:list_tools")
-                tools.append(Tool(**tool))
-
-    return tools
+    tools = get_mcp_configuration_with_retry(partition_key).get("tools", [])
 
     return [
         Tool(**tool)
-        for tool in get_mcp_configuration_with_retry(partition_key).get("tools", [])
+        for tool in tools
+        if isinstance(tool, dict) and "inputSchema" in tool
     ]
 
 
@@ -349,7 +342,10 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
         }
 
     except Exception as e:
-        Debugger.info(variable=e, stage=f"{__name__}:process_mcp_message")
+        Debugger.info(
+            variable=traceback.format_exc(),
+            stage=f"{__name__}:process_mcp_message",
+        )
         return {
             "jsonrpc": "2.0",
             "id": message.get("id") if isinstance(message, dict) else "",
