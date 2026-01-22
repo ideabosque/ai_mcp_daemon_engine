@@ -129,7 +129,9 @@ async def list_prompts(partition_key: str = "default") -> List[Prompt]:
                     name=prompt["name"],
                     description=prompt["description"],
                     arguments=[
-                        PromptArgument(**argument) for argument in prompt["arguments"]
+                        PromptArgument(**argument)
+                        for argument in prompt.get("arguments", [])
+                        if isinstance(argument, dict)
                     ],
                 )
                 for prompt in prompts
