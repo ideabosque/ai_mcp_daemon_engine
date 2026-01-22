@@ -434,13 +434,12 @@ class Config:
                 traceback.print_exc()
                 raise Exception(f"Failed to fetch MCP functions: {response['errors']}")
 
-            if not response.get("mcpFunctionList", {}).get("mcpFunctionList"):
+            mcp_functions = response.get("mcpFunctionList", {}).get("mcpFunctionList")
+
+            if not isinstance(mcp_functions, list) or len(mcp_functions) < 1:
                 cls.logger.warning(
                     f"No MCP functions found for partition_key: {partition_key}"
                 )
-                mcp_functions = []
-            else:
-                mcp_functions = response["mcpFunctionList"]["mcpFunctionList"]
 
             # Step 2: Categorize functions by type
             tools = resources = prompts = []

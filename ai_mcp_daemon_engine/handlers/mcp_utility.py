@@ -25,7 +25,6 @@ from mcp.types import (
     TextContent,
     TextResourceContents,
 )
-
 from silvaengine_utility import Debugger, Invoker, Serializer
 
 from .config import Config
@@ -352,7 +351,8 @@ def execute_decorator():
 
 
 def get_mcp_configuration_with_retry(
-    partition_key: str, max_retries: int = 1
+    partition_key: str,
+    max_retries: int = 1,
 ) -> Dict[str, Any] | Any:
     """
     Get MCP configuration with automatic retry on failure.

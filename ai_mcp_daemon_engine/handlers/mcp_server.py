@@ -39,9 +39,10 @@ async def list_tools(partition_key: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    config = get_mcp_configuration_with_retry(partition_key)
-    tools = config["tools"]
-    return [Tool(**tool) for tool in tools]
+    return [
+        Tool(**tool)
+        for tool in get_mcp_configuration_with_retry(partition_key).get("tools", [])
+    ]
 
 
 @server.call_tool()
@@ -52,9 +53,8 @@ async def call_tool(
     from .mcp_utility import get_mcp_configuration_with_retry
 
     config = get_mcp_configuration_with_retry(partition_key)
-    tools = config["tools"]
 
-    if not any(tool["name"] == name for tool in tools):
+    if not any(tool["name"] == name for tool in config.get("tools", [])):
         raise ValueError(f"Unknown tool: {name}")
 
     module_link = next(
@@ -160,6 +160,8 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
 
         elif method == "tools/list":
             tools = await list_tools(partition_key=partition_key)
+            for t in tools:
+                print(f">>>>>>>> {t.name}, {hasattr(t, 'inputSchema')}")
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
