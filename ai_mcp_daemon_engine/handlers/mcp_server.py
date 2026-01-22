@@ -28,6 +28,7 @@ from .mcp_utility import (
     execute_prompt_function,
     execute_resource_function,
     execute_tool_function,
+    get_mcp_configuration_with_retry,
 )
 
 # === FastAPI and MCP Initialization ===
@@ -38,15 +39,18 @@ server = Server("MCP SSE Server")
 @server.list_tools()
 async def list_tools(partition_key: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
-    from .mcp_utility import get_mcp_configuration_with_retry
+    config = get_mcp_configuration_with_retry(partition_key)
 
-    tools = get_mcp_configuration_with_retry(partition_key).get("tools", [])
+    if isinstance(config, dict) and "tools" in config:
+        tools = config.get("tools", [])
 
-    return [
-        Tool(**tool)
-        for tool in tools
-        if isinstance(tool, dict) and "inputSchema" in tool
-    ]
+        if isinstance(tools, list):
+            return [
+                Tool(**tool)
+                for tool in tools
+                if isinstance(tool, dict) and "inputSchema" in tool
+            ]
+    return []
 
 
 @server.call_tool()
@@ -84,12 +88,18 @@ async def call_tool(
 @server.list_resources()
 async def list_resources(partition_key: str = "default") -> List[Resource]:
     """List available resources for the given endpoint"""
-    from .mcp_utility import get_mcp_configuration_with_retry
+    config = get_mcp_configuration_with_retry(partition_key).get("resources", [])
 
-    config = get_mcp_configuration_with_retry(partition_key)
-    resources = config["resources"]
+    if isinstance(config, dict) and "resources" in config:
+        resources = config.get("resources", [])
 
-    return [Resource(**resource) for resource in resources]
+        if isinstance(resources, list):
+            return [
+                Resource(**resource)
+                for resource in resources
+                if isinstance(resource, dict) and "inputSchema" in resource
+            ]
+    return []
 
 
 @server.read_resource()
@@ -108,19 +118,24 @@ async def read_resource(uri: str, partition_key: str = "default") -> Any:
 @server.list_prompts()
 async def list_prompts(partition_key: str = "default") -> List[Prompt]:
     """List available prompts for the given endpoint"""
-    from .mcp_utility import get_mcp_configuration_with_retry
+    config = get_mcp_configuration_with_retry(partition_key=partition_key)
 
-    config = get_mcp_configuration_with_retry(partition_key)
-    prompts = config["prompts"]
+    if isinstance(config, dict) and "prompts" in config:
+        prompts = config.get("prompts", [])
 
-    return [
-        Prompt(
-            name=prompt["name"],
-            description=prompt["description"],
-            arguments=[PromptArgument(**argument) for argument in prompt["arguments"]],
-        )
-        for prompt in prompts
-    ]
+        if isinstance(prompts, list):
+            return [
+                Prompt(
+                    name=prompt["name"],
+                    description=prompt["description"],
+                    arguments=[
+                        PromptArgument(**argument) for argument in prompt["arguments"]
+                    ],
+                )
+                for prompt in prompts
+                if isinstance(prompt, dict) and "inputSchema" in prompt
+            ]
+    return []
 
 
 @server.get_prompt()
@@ -128,8 +143,6 @@ async def get_prompt(
     name: str, arguments: Optional[Dict[str, Any]], partition_key: str = "default"
 ) -> GetPromptResult:
     """Get a specific prompt with given arguments"""
-    from .mcp_utility import get_mcp_configuration_with_retry
-
     config = get_mcp_configuration_with_retry(partition_key)
     prompts = config["prompts"]
 
