@@ -42,7 +42,7 @@ async def list_tools(partition_key: str = "default") -> List[Tool]:
     tools = []
     tool_configs = get_mcp_configuration_with_retry(partition_key).get("tools", tools)
 
-    if isinstance(tool_configs, list) and len(tool_configs) < 1:
+    if isinstance(tool_configs, list) and len(tool_configs) > 0:
         for tool in tool_configs:
             Debugger.info(variable=tool, stage=f"{__name__}:list_tools")
             tools.append(Tool(**tool))
