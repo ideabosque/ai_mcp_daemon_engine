@@ -439,13 +439,19 @@ class Config:
                 mcp_functions = response["mcpFunctionList"]["mcpFunctionList"]
 
             # Step 2: Categorize functions by type
-            tools = [func for func in mcp_functions if func.get("mcpType") == "tool"]
-            resources = [
-                func for func in mcp_functions if func.get("mcpType") == "resource"
-            ]
-            prompts = [
-                func for func in mcp_functions if func.get("mcpType") == "prompt"
-            ]
+            tools = resources = prompts = []
+
+            for func in mcp_functions:
+                if func.get("mcpType") == "tool":
+                    tools.append(func)
+                elif func.get("mcpType") == "resource":
+                    resources.append(func)
+                elif func.get("mcpType") == "prompt":
+                    prompts.append(func)
+                else:
+                    cls.logger.warning(
+                        f"Unknown MCP function type: {func.get('mcpType')}"
+                    )
 
             if cls.logger:
                 cls.logger.info(
@@ -480,6 +486,12 @@ class Config:
                 cls.logger.info(
                     f"Successfully cached MCP configuration for partition_key: {partition_key}"
                 )
+
+            Debugger.info(
+                variable=response,
+                stage=f"{__name__}:Fetch all MCP functions 222",
+                delimiter="_"
+            )
 
             return mcp_configuration
 
