@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+from operator import delitem
 import traceback
 
 __author__ = "bibow"
@@ -410,6 +411,12 @@ class Config:
                 variables={},
             )
             response = Serializer.json_loads(response.get("body", response))
+
+            Debugger.info(
+                variable=response,
+                stage=f"{__name__}:Fetch all MCP functions",
+                delimiter="##"
+            )
 
             if "data" in response:
                 response = response.get("data", {})
