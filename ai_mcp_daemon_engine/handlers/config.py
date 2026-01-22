@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from operator import delitem
 import traceback
+from operator import delitem
 
 __author__ = "bibow"
 
@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 import boto3
 from passlib.context import CryptContext
 from pydantic import AnyUrl
-from silvaengine_utility import Serializer, Debugger, JSONSnakeCase
+from silvaengine_utility import Debugger, JSONSnakeCase, Serializer
 
 from ..models import utils
 
@@ -370,7 +370,11 @@ class Config:
         with p.open("r", encoding="utf-8") as f:
             raw = json.load(f)
 
-        return {u["username"]: LocalUser(**u) for u in raw if isinstance(u, dict) and "username" in u}
+        return {
+            u["username"]: LocalUser(**u)
+            for u in raw
+            if isinstance(u, dict) and "username" in u
+        }
 
     # Fetches and caches GraphQL schema for a given function
     @classmethod
@@ -415,7 +419,7 @@ class Config:
             Debugger.info(
                 variable=response,
                 stage=f"{__name__}:Fetch all MCP functions",
-                delimiter="##"
+                delimiter="##",
             )
 
             if "data" in response:
@@ -488,9 +492,9 @@ class Config:
                 )
 
             Debugger.info(
-                variable=response,
+                variable=mcp_configuration,
                 stage=f"{__name__}:Fetch all MCP functions 222",
-                delimiter="_"
+                delimiter="_",
             )
 
             return mcp_configuration
@@ -662,8 +666,7 @@ class Config:
 
                     except Exception as e:
                         Debugger.info(
-                            variable=e,
-                            stage=f"{__name__}:_fetch_modules_and_settings"
+                            variable=e, stage=f"{__name__}:_fetch_modules_and_settings"
                         )
                         if cls.logger:
                             cls.logger.error(
@@ -681,8 +684,7 @@ class Config:
 
             except Exception as e:
                 Debugger.info(
-                    variable=e,
-                    stage=f"{__name__}:_fetch_modules_and_settings"
+                    variable=e, stage=f"{__name__}:_fetch_modules_and_settings"
                 )
                 if cls.logger:
                     cls.logger.error(f"Error processing module {module_name}: {e}")
