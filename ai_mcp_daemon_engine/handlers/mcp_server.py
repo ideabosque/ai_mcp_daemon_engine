@@ -39,16 +39,16 @@ async def list_tools(partition_key: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
     from .mcp_utility import get_mcp_configuration_with_retry
 
-    tools = []
-    tool_configs = get_mcp_configuration_with_retry(partition_key).get("tools", tools)
+    # tools = []
+    # tool_configs = get_mcp_configuration_with_retry(partition_key).get("tools", tools)
 
-    if isinstance(tool_configs, list) and len(tool_configs) > 0:
-        for tool in tool_configs:
-            if "inputSchema" in tool:
-                Debugger.info(variable=tool, stage=f"{__name__}:list_tools")
-                tools.append(Tool(**tool))
+    # if isinstance(tool_configs, list) and len(tool_configs) > 0:
+    #     for tool in tool_configs:
+    #         if "inputSchema" in tool:
+    #             Debugger.info(variable=tool, stage=f"{__name__}:list_tools")
+    #             tools.append(Tool(**tool))
 
-    return tools
+    # return tools
 
     return [
         Tool(**tool)

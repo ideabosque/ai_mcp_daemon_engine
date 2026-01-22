@@ -439,27 +439,28 @@ class Config:
             tools = resources = prompts = []
 
             for func in mcp_functions:
-                required_attributes = func.get("inputSchema", {}).get("required")
+                if isinstance(func, dict) and "inputSchema" in func:
+                    # required_attributes = func.get("inputSchema", {}).get("required")
 
-                if (
-                    isinstance(required_attributes, list)
-                    and len(required_attributes) > 0
-                ):
-                    func["inputSchema"]["required"] = JSON.transform_dict_keys(
-                        data=required_attributes,
-                        key_style=KeyStyle.SNAKE,
-                    )
+                    # if (
+                    #     isinstance(required_attributes, list)
+                    #     and len(required_attributes) > 0
+                    # ):
+                    #     func["inputSchema"]["required"] = JSON.transform_dict_keys(
+                    #         data=required_attributes,
+                    #         key_style=KeyStyle.SNAKE,
+                    #     )
 
-                if func.get("mcpType") == "tool":
-                    tools.append(func)
-                elif func.get("mcpType") == "resource":
-                    resources.append(func)
-                elif func.get("mcpType") == "prompt":
-                    prompts.append(func)
-                else:
-                    cls.logger.warning(
-                        f"Unknown MCP function type: {func.get('mcpType')}"
-                    )
+                    if func.get("mcpType") == "tool":
+                        tools.append(func)
+                    elif func.get("mcpType") == "resource":
+                        resources.append(func)
+                    elif func.get("mcpType") == "prompt":
+                        prompts.append(func)
+                    else:
+                        cls.logger.warning(
+                            f"Unknown MCP function type: {func.get('mcpType')}"
+                        )
 
             if cls.logger:
                 cls.logger.info(
