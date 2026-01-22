@@ -139,6 +139,11 @@ async def get_prompt(
 async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
     """Process incoming MCP messages"""
     try:
+        if not partition_key:
+            raise ValueError("Invalid partition key")
+        elif not message or not isinstance(message, dict):
+            raise ValueError("Invalid message")
+
         method = message.get("method")
         params = message.get("params", {})
         msg_id = message.get("id")
@@ -335,9 +340,10 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
         }
 
     except Exception as e:
+        Debugger.info(variable=e, stage=f"{__name__}:process_mcp_message")
         return {
             "jsonrpc": "2.0",
-            "id": message.get("id"),
+            "id": message.get("id") if isinstance(message, dict) else "",
             "error": {"code": -32603, "message": "Internal error", "data": str(e)},
         }
 
