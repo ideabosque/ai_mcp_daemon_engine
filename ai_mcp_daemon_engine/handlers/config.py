@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 import boto3
 from passlib.context import CryptContext
 from pydantic import AnyUrl
-from silvaengine_utility import Debugger, JSONSnakeCase, Serializer
+from silvaengine_utility import JSON, Debugger, JSONSnakeCase, KeyStyle, Serializer
 
 from ..models import utils
 
@@ -439,6 +439,17 @@ class Config:
             tools = resources = prompts = []
 
             for func in mcp_functions:
+                required_attributes = func.get("inputSchema", {}).get("required")
+
+                if (
+                    isinstance(required_attributes, list)
+                    and len(required_attributes) > 0
+                ):
+                    func["inputSchema"]["required"] = JSON.transform_dict_keys(
+                        data=required_attributes,
+                        key_style=KeyStyle.SNAKE,
+                    )
+
                 if func.get("mcpType") == "tool":
                     tools.append(func)
                 elif func.get("mcpType") == "resource":
@@ -483,12 +494,6 @@ class Config:
                 cls.logger.info(
                     f"Successfully cached MCP configuration for partition_key: {partition_key}"
                 )
-
-            Debugger.info(
-                variable=mcp_configuration,
-                stage=f"{__name__}:Fetch all MCP functions 222",
-                delimiter="_",
-            )
 
             return mcp_configuration
 
