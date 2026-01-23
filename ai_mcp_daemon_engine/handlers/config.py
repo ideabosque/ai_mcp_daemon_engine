@@ -439,18 +439,6 @@ class Config:
             tools = resources = prompts = []
 
             for func in mcp_functions:
-                # if isinstance(func, dict) and "inputSchema" in func:
-                #     required_attributes = func.get("inputSchema", {}).get("required")
-
-                #     if (
-                #         isinstance(required_attributes, list)
-                #         and len(required_attributes) > 0
-                #     ):
-                #         func["inputSchema"]["required"] = JSON.transform_dict_keys(
-                #             data=required_attributes,
-                #             key_style=KeyStyle.SNAKE,
-                #         )
-
                 if func.get("mcpType") == "tool":
                     tools.append(func)
                 elif func.get("mcpType") == "resource":
@@ -461,11 +449,6 @@ class Config:
                     cls.logger.warning(
                         f"Unknown MCP function type: {func.get('mcpType')}"
                     )
-
-            Debugger.info(
-                variable=f"Found {len(tools)} tools, {len(resources)} resources, {len(prompts)} prompts",
-                stage=f"{__name__}:fetch_mcp_configurations",
-            )
 
             # Step 3: Build initial configuration structure
             module_links = [
