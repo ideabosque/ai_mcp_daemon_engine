@@ -582,23 +582,24 @@ class Config:
                 mcp_functions = response["mcpFunctionList"]["mcpFunctionList"]
 
             # Step 2: Categorize functions by type
-            tools = []
-            for func in mcp_functions:
-                if func.get("mcpType") != "tool":
-                    continue
-                # Normalize schema keywords in tool data
-                if "data" in func and isinstance(func["data"], dict):
-                    func["data"]["inputSchema"] = cls._normalize_schema_keywords(
-                        func["data"]["inputSchema"]
-                    )
-                tools.append(func)
+            tools = resources = prompts = []
 
-            resources = [
-                func for func in mcp_functions if func.get("mcpType") == "resource"
-            ]
-            prompts = [
-                func for func in mcp_functions if func.get("mcpType") == "prompt"
-            ]
+            for func in mcp_functions:
+                if func.get("mcpType") == "tool":
+                    # Normalize schema keywords in tool data
+                    if "data" in func and isinstance(func["data"], dict):
+                        func["data"]["inputSchema"] = cls._normalize_schema_keywords(
+                            func["data"]["inputSchema"]
+                        )
+                    tools.append(func)
+                elif func.get("mcpType") == "resource":
+                    resources.append(func)
+                elif func.get("mcpType") == "prompt":
+                    prompts.append(func)
+                else:
+                    cls.logger.warning(
+                        f"Unknown MCP function type: {func.get('mcpType')}"
+                    )
 
             if cls.logger:
                 cls.logger.info(
