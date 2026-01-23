@@ -6,6 +6,7 @@ __author__ = "bibow"
 
 import logging
 import sys
+import traceback
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from mcp.server import Server
@@ -27,6 +28,7 @@ from .mcp_utility import (
     execute_prompt_function,
     execute_resource_function,
     execute_tool_function,
+    get_mcp_configuration_with_retry,
 )
 
 # === FastAPI and MCP Initialization ===
@@ -37,31 +39,42 @@ server = Server("MCP SSE Server")
 @server.list_tools()
 async def list_tools(partition_key: str = "default") -> List[Tool]:
     """List available tools for the given endpoint"""
-    from .mcp_utility import get_mcp_configuration_with_retry
-
     config = get_mcp_configuration_with_retry(partition_key)
-    tools = config["tools"]
-    return [Tool(**tool) for tool in tools]
+
+    if isinstance(config, dict) and "tools" in config:
+        tools = config.get("tools", [])
+
+        if isinstance(tools, list):
+            return [
+                Tool(**tool)
+                for tool in tools
+                if isinstance(tool, dict) and "inputSchema" in tool
+            ]
+    return []
 
 
 @server.call_tool()
 async def call_tool(
-    name: str, arguments: Optional[Dict[str, Any]], partition_key: str = "default"
+    name: str,
+    arguments: Optional[Dict[str, Any]],
+    partition_key: str = "default",
 ) -> Sequence[Union[TextContent, ImageContent, EmbeddedResource]]:
     """Call a specific tool with given arguments"""
-    from .mcp_utility import get_mcp_configuration_with_retry
-
     config = get_mcp_configuration_with_retry(partition_key)
-    tools = config["tools"]
+    name = str(name).strip()
 
-    if not any(tool["name"] == name for tool in tools):
+    if (
+        not isinstance(config, dict)
+        or not isinstance(config.get("tools"), list)
+        or not any(tool.get("name") == name for tool in config.get("tools", []))
+    ):
         raise ValueError(f"Unknown tool: {name}")
 
     module_link = next(
         (
             module_link
-            for module_link in config["module_links"]
-            if module_link["name"] == name and module_link["type"] == "tool"
+            for module_link in config.get("module_links", [])
+            if module_link.get("name") == name and module_link.get("type") == "tool"
         ),
         {},
     )
@@ -80,12 +93,18 @@ async def call_tool(
 @server.list_resources()
 async def list_resources(partition_key: str = "default") -> List[Resource]:
     """List available resources for the given endpoint"""
-    from .mcp_utility import get_mcp_configuration_with_retry
+    config = get_mcp_configuration_with_retry(partition_key).get("resources", [])
 
-    config = get_mcp_configuration_with_retry(partition_key)
-    resources = config["resources"]
+    if isinstance(config, dict) and "resources" in config:
+        resources = config.get("resources", [])
 
-    return [Resource(**resource) for resource in resources]
+        if isinstance(resources, list):
+            return [
+                Resource(**resource)
+                for resource in resources
+                if isinstance(resource, dict) and "inputSchema" in resource
+            ]
+    return []
 
 
 @server.read_resource()
@@ -94,8 +113,15 @@ async def read_resource(uri: str, partition_key: str = "default") -> Any:
     from .mcp_utility import get_mcp_configuration_with_retry
 
     config = get_mcp_configuration_with_retry(partition_key)
-    resources = config["resources"]
-    if not any(resource["uri"] == uri for resource in resources):
+    uri = str(uri).strip()
+
+    if (
+        not isinstance(config, dict)
+        or not isinstance(config.get("resources"), list)
+        or not any(
+            resource.get("uri") == uri for resource in config.get("resources", [])
+        )
+    ):
         raise ValueError(f"Unknown resource: {uri}")
 
     return execute_resource_function(partition_key, uri)
@@ -104,32 +130,43 @@ async def read_resource(uri: str, partition_key: str = "default") -> Any:
 @server.list_prompts()
 async def list_prompts(partition_key: str = "default") -> List[Prompt]:
     """List available prompts for the given endpoint"""
-    from .mcp_utility import get_mcp_configuration_with_retry
+    config = get_mcp_configuration_with_retry(partition_key=partition_key)
 
-    config = get_mcp_configuration_with_retry(partition_key)
-    prompts = config["prompts"]
+    if isinstance(config, dict) and "prompts" in config:
+        prompts = config.get("prompts", [])
 
-    return [
-        Prompt(
-            name=prompt["name"],
-            description=prompt["description"],
-            arguments=[PromptArgument(**argument) for argument in prompt["arguments"]],
-        )
-        for prompt in prompts
-    ]
+        if isinstance(prompts, list):
+            return [
+                Prompt(
+                    name=prompt["name"],
+                    description=prompt["description"],
+                    arguments=[
+                        PromptArgument(**argument)
+                        for argument in prompt.get("arguments", [])
+                        if isinstance(argument, dict)
+                    ],
+                )
+                for prompt in prompts
+                if isinstance(prompt, dict) and "inputSchema" in prompt
+            ]
+    return []
 
 
 @server.get_prompt()
 async def get_prompt(
-    name: str, arguments: Optional[Dict[str, Any]], partition_key: str = "default"
+    name: str,
+    arguments: Optional[Dict[str, Any]],
+    partition_key: str = "default",
 ) -> GetPromptResult:
     """Get a specific prompt with given arguments"""
-    from .mcp_utility import get_mcp_configuration_with_retry
-
     config = get_mcp_configuration_with_retry(partition_key)
-    prompts = config["prompts"]
+    name = str(name).strip()
 
-    if not any(prompt["name"] == name for prompt in prompts):
+    if (
+        not isinstance(config, dict)
+        or not isinstance(config.get("prompts"), list)
+        or not any(prompt["name"] == name for prompt in config.get("prompts", []))
+    ):
         raise ValueError(f"Unknown prompt: {name}")
 
     return execute_prompt_function(partition_key, name, arguments)
@@ -139,6 +176,11 @@ async def get_prompt(
 async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
     """Process incoming MCP messages"""
     try:
+        if not partition_key:
+            raise ValueError("Invalid partition key")
+        elif not message or not isinstance(message, dict):
+            raise ValueError("Invalid message")
+
         method = message.get("method")
         params = message.get("params", {})
         msg_id = message.get("id")
@@ -333,9 +375,13 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
         }
 
     except Exception as e:
+        Debugger.info(
+            variable=traceback.format_exc(),
+            stage=f"{__name__}:process_mcp_message",
+        )
         return {
             "jsonrpc": "2.0",
-            "id": message.get("id"),
+            "id": message.get("id") if isinstance(message, dict) else "",
             "error": {"code": -32603, "message": "Internal error", "data": str(e)},
         }
 
