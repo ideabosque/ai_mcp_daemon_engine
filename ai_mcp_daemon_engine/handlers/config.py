@@ -17,7 +17,8 @@ from typing import Any, Dict, List
 import boto3
 from passlib.context import CryptContext
 from pydantic import AnyUrl
-from silvaengine_utility import JSON, Debugger, JSONSnakeCase, KeyStyle, Serializer
+
+from silvaengine_utility import Debugger, JSONSnakeCase, Serializer
 
 from ..models import utils
 
@@ -376,6 +377,151 @@ class Config:
             if isinstance(u, dict) and "username" in u
         }
 
+    @classmethod
+    def _to_snake_case(cls, camel_str: str) -> str:
+        """Convert camelCase string to snake_case."""
+        import re
+
+        # Insert underscore before uppercase letters and convert to lowercase
+        snake_str = re.sub(r"(?<!^)(?=[A-Z])", "_", camel_str).lower()
+        return snake_str
+
+    @classmethod
+    def _normalize_schema_keywords(cls, schema: Any) -> Any:
+        """
+        Recursively convert keyword values to proper data types in JSON Schema.
+        Handles nested arrays and objects.
+        Converts property keys from camelCase to snake_case.
+        """
+        if not isinstance(schema, dict):
+            return schema
+
+        normalized = {}
+
+        # Keywords that should be integers
+        integer_keywords = {
+            "minLength",
+            "maxLength",
+            "minItems",
+            "maxItems",
+            "minProperties",
+            "maxProperties",
+            "minContains",
+            "maxContains",
+        }
+
+        # Keywords that should be numbers (int or float)
+        number_keywords = {
+            "minimum",
+            "maximum",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "multipleOf",
+        }
+
+        # Keywords that should be booleans
+        boolean_keywords = {"uniqueItems", "additionalProperties"}
+
+        # Keywords that should be decimals/numbers
+        decimal_keywords = {"default", "const"}
+
+        for key, value in schema.items():
+            # Convert to proper data type based on keyword
+            if key in integer_keywords:
+                if isinstance(value, int):
+                    normalized[key] = value
+                else:
+                    try:
+                        normalized[key] = int(value)
+                    except (ValueError, TypeError):
+                        normalized[key] = value
+            elif key in number_keywords:
+                if isinstance(value, (int, float)):
+                    normalized[key] = value
+                else:
+                    try:
+                        # Try int first, then float
+                        normalized[key] = (
+                            int(value)
+                            if isinstance(value, str) and value.isdigit()
+                            else float(value)
+                        )
+                    except (ValueError, TypeError):
+                        normalized[key] = value
+            elif key in decimal_keywords:
+                # Handle default and const values - convert if they are numeric strings
+                if isinstance(value, (int, float)):
+                    normalized[key] = value
+                elif isinstance(value, str):
+                    try:
+                        # Try to convert to number if it's a numeric string
+                        normalized[key] = (
+                            int(value) if value.isdigit() else float(value)
+                        )
+                    except (ValueError, TypeError):
+                        # Keep as string if conversion fails
+                        normalized[key] = value
+                else:
+                    # Keep the value as-is for other types (bool, list, dict, etc.)
+                    normalized[key] = value
+            elif key in boolean_keywords:
+                if isinstance(value, str):
+                    normalized[key] = value.lower() in ("true", "1", "yes")
+                elif isinstance(value, bool):
+                    normalized[key] = value
+                else:
+                    try:
+                        normalized[key] = bool(value)
+                    except (ValueError, TypeError):
+                        normalized[key] = value
+            # Recursive handling for nested structures
+            elif key == "properties" and isinstance(value, dict):
+                # Recursively normalize each property schema and convert keys to snake_case
+                normalized[key] = {
+                    cls._to_snake_case(prop_name): cls._normalize_schema_keywords(
+                        prop_schema
+                    )
+                    for prop_name, prop_schema in value.items()
+                }
+            elif key == "items" and isinstance(value, dict):
+                # Recursively normalize array item schema
+                normalized[key] = cls._normalize_schema_keywords(value)
+            elif key == "additionalItems" and isinstance(value, dict):
+                # Recursively normalize additional items schema
+                normalized[key] = cls._normalize_schema_keywords(value)
+            elif key == "patternProperties" and isinstance(value, dict):
+                # Recursively normalize pattern properties
+                normalized[key] = {
+                    pattern: cls._normalize_schema_keywords(prop_schema)
+                    for pattern, prop_schema in value.items()
+                }
+            elif key == "contains" and isinstance(value, dict):
+                # Recursively normalize contains schema
+                normalized[key] = cls._normalize_schema_keywords(value)
+            elif key == "allOf" and isinstance(value, list):
+                # Recursively normalize allOf schemas
+                normalized[key] = [
+                    cls._normalize_schema_keywords(item) for item in value
+                ]
+            elif key == "anyOf" and isinstance(value, list):
+                # Recursively normalize anyOf schemas
+                normalized[key] = [
+                    cls._normalize_schema_keywords(item) for item in value
+                ]
+            elif key == "oneOf" and isinstance(value, list):
+                # Recursively normalize oneOf schemas
+                normalized[key] = [
+                    cls._normalize_schema_keywords(item) for item in value
+                ]
+            elif key == "not" and isinstance(value, dict):
+                # Recursively normalize not schema
+                normalized[key] = cls._normalize_schema_keywords(value)
+            else:
+                # Keep other values as-is
+                normalized[key] = value
+
+        return normalized
+
     # Fetches and caches GraphQL schema for a given function
     @classmethod
     def fetch_mcp_configuration(
@@ -436,19 +582,28 @@ class Config:
                 )
 
             # Step 2: Categorize functions by type
-            tools = resources = prompts = []
-
+            tools = []
             for func in mcp_functions:
-                if func.get("mcpType") == "tool":
-                    tools.append(func)
-                elif func.get("mcpType") == "resource":
-                    resources.append(func)
-                elif func.get("mcpType") == "prompt":
-                    prompts.append(func)
-                else:
-                    cls.logger.warning(
-                        f"Unknown MCP function type: {func.get('mcpType')}"
+                if func.get("mcpType") != "tool":
+                    continue
+                # Normalize schema keywords in tool data
+                if "data" in func and isinstance(func["data"], dict):
+                    func["data"]["inputSchema"] = cls._normalize_schema_keywords(
+                        func["data"]["inputSchema"]
                     )
+                tools.append(func)
+
+            resources = [
+                func for func in mcp_functions if func.get("mcpType") == "resource"
+            ]
+            prompts = [
+                func for func in mcp_functions if func.get("mcpType") == "prompt"
+            ]
+
+            if cls.logger:
+                cls.logger.info(
+                    f"Found {len(tools)} tools, {len(resources)} resources, {len(prompts)} prompts"
+                )
 
             # Step 3: Build initial configuration structure
             module_links = [
