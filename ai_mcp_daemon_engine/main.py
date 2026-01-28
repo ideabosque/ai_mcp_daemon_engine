@@ -169,6 +169,10 @@ class AIMCPDaemonEngine(object):
 
         return Graphql.error_response("Invalid mcp graphql engine")
 
+    @staticmethod
+    def build_graphql_schema():
+        return Config.mcp_core.build_graphql_schema()
+
     def daemon(self):
         try:
             if self.transport == "sse":
