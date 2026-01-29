@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 from silvaengine_utility import Debugger, Graphql, HttpResponse, Invoker, Serializer
 
 from .handlers.config import Config
+from .handlers.mcp_core import MCPCore
 from .handlers.mcp_server import run_stdio
 
 
@@ -171,7 +172,7 @@ class AIMCPDaemonEngine(object):
 
     @staticmethod
     def build_graphql_schema():
-        return Config.mcp_core.build_graphql_schema()
+        return MCPCore.build_graphql_schema()
 
     def daemon(self):
         try:
