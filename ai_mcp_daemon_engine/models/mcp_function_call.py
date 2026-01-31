@@ -280,6 +280,7 @@ def insert_update_mcp_function_call(
         }
         for key in [
             "content_in_s3",
+            "content",
             "status",
             "notes",
             "time_spent",
@@ -335,6 +336,7 @@ def insert_update_mcp_function_call(
         "mcp_type": MCPFunctionCallModel.mcp_type,
         "arguments": MCPFunctionCallModel.arguments,
         "content_in_s3": MCPFunctionCallModel.content_in_s3,
+        "content": MCPFunctionCallModel.content,
         "status": MCPFunctionCallModel.status,
         "notes": MCPFunctionCallModel.notes,
         "time_spent": MCPFunctionCallModel.time_spent,
@@ -344,7 +346,34 @@ def insert_update_mcp_function_call(
         if key in kwargs:
             actions.append(field.set(kwargs[key]))
 
-    mcp_function_call.update(actions=actions)
+    try:
+        mcp_function_call.update(actions=actions)
+    except Exception as e:
+        # Check if exception is due to DynamoDB item size limit (400KB)
+        if "Item size has exceeded the maximum allowed size" in str(
+            e
+        ) or "ValidationException" in str(type(e).__name__):
+            Config.logger.warning(
+                f"DynamoDB maximum item size (400KB) exceeded for {mcp_function_call_uuid}. "
+                f"Offloading content to S3. Error: {str(e)}"
+            )
+
+            s3_key = f"mcp_content/{kwargs['mcp_function_call_uuid']}.json"
+            _save_content_to_s3(
+                Serializer.json_dumps(kwargs.get("content")),
+                Config.funct_bucket_name,
+                s3_key,
+            )
+
+            for key, field in field_map.items():
+                if key in kwargs:
+                    if key == "content":
+                        actions.append(field.set(None))
+                        actions.append(MCPFunctionCallModel.content_in_s3.set(True))
+                    else:
+                        actions.append(field.set(kwargs[key]))
+        else:
+            raise
     return
 
 
