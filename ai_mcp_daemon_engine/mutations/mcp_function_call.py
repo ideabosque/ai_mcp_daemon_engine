@@ -24,7 +24,7 @@ class InsertUpdateMcpFunctionCall(Mutation):
         name = String(required=False)
         mcp_type = String(required=False)
         arguments = JSONCamelCase(required=False)
-        has_content = Boolean(required=False)
+        content_in_s3 = Boolean(required=False)
         status = String(required=False)
         notes = String(required=False)
         time_spent = Int(required=False)
