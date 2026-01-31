@@ -64,6 +64,7 @@ def wait_for_background_threads(timeout=30):
 INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
     $arguments: JSONCamelCase,
     $contentInS3: Boolean,
+    $content: String,
     $mcpFunctionCallUuid: String,
     $mcpType: String,
     $name: String,
@@ -75,6 +76,7 @@ INSERT_UPDATE_MCP_FUNCTION_CALL = """mutation insertUpdateMcpFunctionCall(
     insertUpdateMcpFunctionCall(
         arguments: $arguments,
         contentInS3: $contentInS3,
+        content: $content,
         mcpFunctionCallUuid: $mcpFunctionCallUuid,
         mcpType: $mcpType,
         name: $name,
