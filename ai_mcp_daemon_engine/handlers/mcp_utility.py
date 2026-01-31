@@ -26,19 +26,9 @@ from mcp.types import (
     TextResourceContents,
 )
 
-from silvaengine_utility import Debugger, Invoker, Serializer
+from silvaengine_utility import Invoker, Serializer
 
 from .config import Config
-
-
-def _save_content_to_s3(content: str, bucket_name: str, key: str) -> None:
-    """Save content to S3 bucket."""
-    try:
-        Config.aws_s3.put_object(Bucket=bucket_name, Key=key, Body=content)
-        Config.logger.info(f"Content saved to S3: s3://{bucket_name}/{key}")
-    except Exception as e:
-        Config.logger.error(f"Failed to save content to S3: {e}")
-        raise
 
 
 # Global registry to track active background threads
@@ -166,14 +156,6 @@ def _insert_update_mcp_function_call(
     if kwargs.get("mcp_function_call_uuid"):
         Config.logger.info("Updating existing MCP function call")
 
-        # Save content to S3 if it exists
-        content_json = (
-            Serializer.json_dumps(kwargs["content"]) if kwargs.get("content") else None
-        )
-        if content_json is not None:
-            s3_key = f"mcp_content/{kwargs['mcp_function_call_uuid']}.json"
-            _save_content_to_s3(content_json, Config.funct_bucket_name, s3_key)
-
         response = Config.mcp_core.mcp_core_graphql(
             **{
                 "context": {
@@ -182,7 +164,7 @@ def _insert_update_mcp_function_call(
                 "query": INSERT_UPDATE_MCP_FUNCTION_CALL,
                 "variables": {
                     "mcpFunctionCallUuid": kwargs["mcp_function_call_uuid"],
-                    "hasContent": True if content_json else False,
+                    "content": kwargs.get("content"),
                     "status": kwargs["status"],
                     "timeSpent": kwargs.get("time_spent", None),
                     "notes": kwargs.get("notes", None),

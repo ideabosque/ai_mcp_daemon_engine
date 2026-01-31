@@ -73,7 +73,8 @@ class MCPFunctionCallModel(BaseModel):
     name = UnicodeAttribute()
     mcp_type = UnicodeAttribute()
     arguments = MapAttribute()
-    has_content = BooleanAttribute(default=False)
+    content_in_s3 = BooleanAttribute(default=False)
+    content = UnicodeAttribute(null=True)
     status = UnicodeAttribute(default="initial")
     notes = UnicodeAttribute(null=True)
     time_spent = NumberAttribute(null=True)
@@ -162,7 +163,7 @@ def get_mcp_function_call_type(
     info: ResolveInfo, mcp_function_call_model: MCPFunctionCallModel
 ) -> MCPFunctionCallType:
     try:
-        if mcp_function_call_model.has_content:
+        if mcp_function_call_model.content_in_s3:
             from ..handlers.config import Config
 
             s3_key = (
@@ -182,8 +183,8 @@ def get_mcp_function_call_type(
     mcp_function_call: Dict[str, Any] = mcp_function_call_model.__dict__[
         "attribute_values"
     ]
-    has_content = mcp_function_call.pop("has_content")
-    if has_content:
+    content_in_s3 = mcp_function_call.pop("content_in_s3")
+    if content_in_s3:
         mcp_function_call["content"] = content
     return MCPFunctionCallType(**Serializer.json_normalize(mcp_function_call))
 
@@ -241,6 +242,16 @@ def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) 
     return inquiry_funct, count_funct, args
 
 
+def _save_content_to_s3(content: str, bucket_name: str, key: str) -> None:
+    """Save content to S3 bucket."""
+    try:
+        Config.aws_s3.put_object(Bucket=bucket_name, Key=key, Body=content)
+        Config.logger.info(f"Content saved to S3: s3://{bucket_name}/{key}")
+    except Exception as e:
+        Config.logger.error(f"Failed to save content to S3: {e}")
+        raise
+
+
 @insert_update_decorator(
     keys={
         "hash_key": "partition_key",
@@ -268,7 +279,7 @@ def insert_update_mcp_function_call(
             "updated_at": pendulum.now("UTC"),
         }
         for key in [
-            "has_content",
+            "content_in_s3",
             "status",
             "notes",
             "time_spent",
@@ -276,11 +287,41 @@ def insert_update_mcp_function_call(
             if key in kwargs:
                 cols[key] = kwargs[key]
 
-        MCPFunctionCallModel(
-            partition_key,
-            mcp_function_call_uuid,
-            **cols,
-        ).save()
+        try:
+            MCPFunctionCallModel(
+                partition_key,
+                mcp_function_call_uuid,
+                **cols,
+            ).save()
+        except Exception as e:
+            # Check if exception is due to DynamoDB item size limit (400KB)
+            if "Item size has exceeded the maximum allowed size" in str(
+                e
+            ) or "ValidationException" in str(type(e).__name__):
+                Config.logger.warning(
+                    f"DynamoDB maximum item size (400KB) exceeded for {mcp_function_call_uuid}. "
+                    f"Offloading content to S3. Error: {str(e)}"
+                )
+
+                s3_key = f"mcp_content/{kwargs['mcp_function_call_uuid']}.json"
+                _save_content_to_s3(
+                    Serializer.json_dumps(cols.get("content")),
+                    Config.funct_bucket_name,
+                    s3_key,
+                )
+                cols.pop("content")
+                cols["content_in_s3"] = True
+
+                MCPFunctionCallModel(
+                    partition_key,
+                    mcp_function_call_uuid,
+                    **cols,
+                ).save()
+
+            else:
+                # Re-raise if it's not an item size exception
+                raise
+
         return
 
     mcp_function_call = kwargs.get("entity")
@@ -293,7 +334,7 @@ def insert_update_mcp_function_call(
         "name": MCPFunctionCallModel.name,
         "mcp_type": MCPFunctionCallModel.mcp_type,
         "arguments": MCPFunctionCallModel.arguments,
-        "has_content": MCPFunctionCallModel.has_content,
+        "content_in_s3": MCPFunctionCallModel.content_in_s3,
         "status": MCPFunctionCallModel.status,
         "notes": MCPFunctionCallModel.notes,
         "time_spent": MCPFunctionCallModel.time_spent,

@@ -290,7 +290,7 @@ PARTITION (partition_key: tenant isolation boundary)
     |                   |
     |                   |-- name/mcp_type ---> MCP FUNCTION CALL (mcp_function_call_uuid, arguments, status)
     |                                   |
-    |                                   |-- optional content in S3: mcp_content/<uuid>.json when has_content=true
+    |                                   |-- optional content in S3: mcp_content/<uuid>.json when content_in_s3=true
 ```
 
 ### Core Entities
@@ -308,7 +308,7 @@ PARTITION (partition_key: tenant isolation boundary)
 | MCPModule | MCPSetting | `classes[].setting_id` → `setting_id` | Module classes point to a shared setting document built during config import. |
 | MCPModule | MCPFunction | `module_name` / `class_name` | Functions reference the Python module/class implementing the MCP tool/resource/prompt. |
 | MCPFunction | MCPFunctionCall | `name` (+ `mcp_type`) | Call records keep the logical MCP name/type they executed; also used for cache invalidation. |
-| MCPFunctionCall | S3 Content | `mcp_function_call_uuid` | When `has_content` is true, payload is stored at `mcp_content/<uuid>.json` in the configured S3 bucket. |
+| MCPFunctionCall | S3 Content | `mcp_function_call_uuid` | When `content_in_s3` is true, payload is stored at `mcp_content/<uuid>.json` in the configured S3 bucket. |
 
 ### Key Structures & Indexes
 
@@ -360,7 +360,7 @@ erDiagram
         string name
         string mcp_type
         json arguments
-        boolean has_content
+        boolean content_in_s3
         string status
         number time_spent
     }
