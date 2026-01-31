@@ -30,7 +30,6 @@ from silvaengine_utility import Invoker, Serializer
 
 from .config import Config
 
-
 # Global registry to track active background threads
 _active_threads = []
 
@@ -302,7 +301,7 @@ def execute_decorator():
                             "mcp_function_call_uuid": mcp_function_call[
                                 "mcpFunctionCallUuid"
                             ],
-                            "content": content,
+                            "content": content[0]["text"],
                             "status": "completed",
                             "time_spent": time_spent,
                             "updatedBy": "mcp_daemon_engine",
