@@ -290,7 +290,7 @@ erDiagram
         string mcp_type
         json arguments
         text content
-        boolean has_content
+        boolean content_in_s3
         string status
         float time_spent
         datetime created_at
@@ -378,12 +378,12 @@ Execution history and audit logs.
 - `mcp_type` (str, required): Type called
 - `arguments` (JSON, optional): Input arguments
 - `content` (JSON, optional): Result (if small)
-- `has_content` (bool, default=False): Whether stored in S3
+- `content_in_s3` (bool, default=False): Whether stored in S3
 - `status` (str, required): "initial", "in_process", "completed", "failed"
 - `time_spent` (float, optional): Duration in seconds
 - `error_message`, `updated_by`, `created_at`, `updated_at`: Audit fields
 
-**S3 Pattern:** When `has_content=true`, result at `s3://{bucket}/mcp_content/{uuid}.json`
+**S3 Pattern:** When `content_in_s3=true`, result at `s3://{bucket}/mcp_content/{uuid}.json`
 
 **Indexes:**
 - `mcp_type-index` (LSI): Query by `partition_key` + `mcp_type`
