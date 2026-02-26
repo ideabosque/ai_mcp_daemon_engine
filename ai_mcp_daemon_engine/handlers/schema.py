@@ -7,7 +7,7 @@ __author__ = "bibow"
 import time
 from typing import Any, Dict
 
-from graphene import Field, Int, ObjectType, ResolveInfo, String
+from graphene import DateTime, Field, Int, ObjectType, ResolveInfo, String
 
 from ..mutations.mcp_configuration import LoadMcpConfiguration
 from ..mutations.mcp_function import DeleteMcpFunction, InsertUpdateMcpFunction
@@ -74,6 +74,8 @@ class Query(ObjectType):
         mcp_type=String(required=False),
         name=String(required=False),
         status=String(required=False),
+        updated_at_gt=DateTime(required=False),
+        updated_at_lt=DateTime(required=False),
     )
 
     mcp_module = Field(

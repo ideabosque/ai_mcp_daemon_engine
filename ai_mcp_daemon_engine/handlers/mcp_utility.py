@@ -841,6 +841,7 @@ def execute_prompt_function(
         raise e
 
 
+# TODO: Rebuild the function to support async execution with proper thread management and cleanup.
 def async_execute_tool_function(
     partition_key: str,
     name: str,

@@ -64,9 +64,24 @@ class NameIndex(LocalSecondaryIndex):
     name = UnicodeAttribute(range_key=True)
 
 
+class UpdatedAtIndex(LocalSecondaryIndex):
+    """
+    This class represents a local secondary index
+    """
+
+    class Meta:
+        billing_mode = "PAY_PER_REQUEST"
+        # All attributes are projected
+        projection = AllProjection()
+        index_name = "updated_at-index"
+
+    partition_key = UnicodeAttribute(hash_key=True)
+    updated_at = UnicodeAttribute(range_key=True)
+
+
 class MCPFunctionCallModel(BaseModel):
     class Meta(BaseModel.Meta):
-        table_name = "mcp-function-calls"
+        table_name = "mcp-function_calls"
 
     partition_key = UnicodeAttribute(hash_key=True)
     mcp_function_call_uuid = UnicodeAttribute(range_key=True)
@@ -83,6 +98,7 @@ class MCPFunctionCallModel(BaseModel):
     updated_at = UTCDateTimeAttribute()
     mcp_type_index = MCPTypeIndex()
     name_index = NameIndex()
+    updated_at_index = UpdatedAtIndex()
 
 
 def purge_cache():
@@ -208,32 +224,51 @@ def resolve_mcp_function_call(
 
 @monitor_decorator
 @resolve_list_decorator(
-    attributes_to_get=["partition_key", "mcp_function_call_uuid", "name", "type"],
+    attributes_to_get=["partition_key", "mcp_function_call_uuid", "name", "updated_at"],
     list_type_class=MCPFunctionCallListType,
     type_funct=get_mcp_function_call_type,
+    scan_index_forward=False,
 )
 def resolve_mcp_function_call_list(info: ResolveInfo, **kwargs: Dict[str, Any]) -> Any:
     partition_key = info.context["partition_key"]
     mcp_type = kwargs.get("mcp_type")
     name = kwargs.get("name")
     status = kwargs.get("status")
+    updated_at_gt = kwargs.get("updated_at_gt")
+    updated_at_lt = kwargs.get("updated_at_lt")
 
     args = []
     inquiry_funct = MCPFunctionCallModel.scan
     count_funct = MCPFunctionCallModel.count
+    range_key_condition = None
     if partition_key:
-        args = [partition_key, None]
-        inquiry_funct = MCPFunctionCallModel.query
-        if mcp_type:
+        if updated_at_gt is not None and updated_at_lt is not None:
+            range_key_condition = MCPFunctionCallModel.updated_at.between(
+                updated_at_gt, updated_at_lt
+            )
+        elif updated_at_gt is not None:
+            range_key_condition = MCPFunctionCallModel.updated_at > updated_at_gt
+        elif updated_at_lt is not None:
+            range_key_condition = MCPFunctionCallModel.updated_at < updated_at_lt
+
+        args = [partition_key, range_key_condition]
+        inquiry_funct = MCPFunctionCallModel.updated_at_index.query
+        count_funct = MCPFunctionCallModel.updated_at_index.count
+
+        if mcp_type and range_key_condition is None:
             inquiry_funct = MCPFunctionCallModel.mcp_type_index.query
             args[1] = MCPFunctionCallModel.mcp_type == mcp_type
             count_funct = MCPFunctionCallModel.mcp_type_index.count
-        elif name:
+        elif name and range_key_condition is None:
             inquiry_funct = MCPFunctionCallModel.name_index.query
             args[1] = MCPFunctionCallModel.name == name
             count_funct = MCPFunctionCallModel.name_index.count
 
     the_filters = None
+    if mcp_type and range_key_condition is not None:
+        the_filters &= MCPFunctionCallModel.mcp_type == mcp_type
+    if name and range_key_condition is not None:
+        the_filters &= MCPFunctionCallModel.name == name
     if status:
         the_filters &= MCPFunctionCallModel.status == status
     if the_filters is not None:
