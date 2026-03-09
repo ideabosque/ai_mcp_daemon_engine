@@ -6,6 +6,7 @@ __author__ = "bibow"
 
 import logging
 import sys
+import time
 import traceback
 from typing import Any, Dict, List, Optional, Sequence, Union
 
@@ -218,6 +219,8 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
             }
 
         elif method == "tools/call":
+            st = time.perf_counter()
+
             result = await call_tool(
                 params["name"], params.get("arguments"), partition_key=partition_key
             )
@@ -258,6 +261,11 @@ async def process_mcp_message(partition_key: str, message: Dict) -> Dict:
                     content_dict["_meta"] = getattr(item, "_meta", {})
                     serialized_content.append(content_dict)
 
+            Debugger.info(
+                variable=f"Call mcp tool: {params}, take time {time.perf_counter() - st}",
+                stage=f"{__name__}:tools/call",
+                delimiter="#",
+            )
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
